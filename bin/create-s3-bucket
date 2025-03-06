@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Generate a random bucket name using a timestamp and random string
+BUCKET_NAME="my-bucket-$(date +%s)-$RANDOM"
+
+# Define the AWS region (change if needed)
+AWS_REGION="eu-south-1"
+
+# Create the S3 bucket
+aws s3api create-bucket --bucket "$BUCKET_NAME" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
+
+# Output the bucket name
+echo "S3 bucket created: $BUCKET_NAME"
