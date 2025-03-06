@@ -93,3 +93,21 @@ This points "www." domain to CloudFront distribution.
 
 1. create an s3 bucket with a random name using the script in bin directory
 2. take the name of the bucket and add it to `.tfvars`
+
+
+## VCS INTEGRATION
+
+For this application we will trigger automatic terraform runs whenever a change is detected inside "/frontend" directory.
+
+Pre-requisites:
+- setup "Terraform Variables" for each input variable we have inside `variables.tf` file.
+
+To connect a workspace to VCS, follow these steps:
+1. go to your chosen Workspace -> Settings -> Version Control
+2. choose the VCS workflow and select your desired VCS and choose the repository we want to connect to
+3. change the following settings:
+    - "Terraform Working Directory" -> write "frontend"
+    - "VCS branch" -> write "main"
+
+    in this way every change pushed to the repository inside "frontend" directory and on the "main" branch, will trigger a terraform run.
+    This means that `terraform plan` will be executed and if successfull, it will require a user confirmation on Terraform Cloud Workspace whether to proceed with `terraform apply` or not.
