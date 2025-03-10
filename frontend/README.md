@@ -108,6 +108,7 @@ To connect a workspace to VCS, follow these steps:
 3. change the following settings:
     - "Terraform Working Directory" -> write "frontend"
     - "VCS branch" -> write "main"
+    - "Automatic Run triggering" -> "Patterns" -> /frontend
 
     in this way every change pushed to the repository inside "frontend" directory and on the "main" branch, will trigger a terraform run.
     This means that `terraform plan` will be executed and if successfull, it will require a user confirmation on Terraform Cloud Workspace whether to proceed with `terraform apply` or not.

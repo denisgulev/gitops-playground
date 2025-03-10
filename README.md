@@ -8,6 +8,8 @@ This repository contains Terraform templates that help you quickly deploy a fron
 
 ## Frontend Setup
 
+![Static Web Hosting](./assets/static-web-hosting.png)
+
 The static frontend app is described in detail in the following article:  
 [Deploy a Static Website with AWS S3, CloudFront, and Terraform](https://denisgulev.com/static-website-with-aws-s3-cloudfront-and-terraform/).
 
