@@ -1,5 +1,6 @@
 # Local .terraform directories
 frontend/.terraform/
+backend/.terraform/
 
 # .tfstate files
 *.tfstate
@@ -14,3 +15,4 @@ frontend/.terraform/
 
 local-env-vars
 
+flask-key.pem
