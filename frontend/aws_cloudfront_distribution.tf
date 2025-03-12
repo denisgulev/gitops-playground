@@ -39,18 +39,18 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   ]
   default_root_object = "index.html"
 
-  # Cache Behavior for EC2-origin (API endpoints)
+  # Cache Behavior for API (EC2)
   ordered_cache_behavior {
     cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
-    path_pattern           = "/api/*"
+    path_pattern           = "/*"
     target_origin_id       = "EC2-origin"
-    viewer_protocol_policy = "redirect-to-https"
+    viewer_protocol_policy = "allow-all"
 
     allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods  = ["GET", "HEAD"]
   }
 
-  # Cache Behavior for EC2 (dynamic content, API)
+  # Default Cache Behavior for Static Content (S3)
   default_cache_behavior {
     cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
     viewer_protocol_policy = "redirect-to-https"
