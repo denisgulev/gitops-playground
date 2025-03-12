@@ -41,6 +41,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 
   # Cache Behavior for EC2-origin (API endpoints)
   ordered_cache_behavior {
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
     path_pattern           = "/api/*"
     target_origin_id       = "EC2-origin"
     viewer_protocol_policy = "redirect-to-https"
