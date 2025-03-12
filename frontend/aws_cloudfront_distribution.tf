@@ -16,7 +16,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   }
 
   origin {
-    domain_name = aws_instance.imported_instance.public_dns
+    domain_name = data.aws_instance.imported_instance.public_dns
     origin_id   = "EC2-origin"
 
     custom_origin_config {
@@ -85,10 +85,6 @@ resource "aws_cloudfront_function" "www_redirect" {
   publish = true
 }
 
-import {
-  to = aws_instance.imported_instance
-  id = var.ec2_instance_id
-}
-
-resource "aws_instance" "imported_instance" {
+data "aws_instance" "imported_instance" {
+  instance_id = var.ec2_instance_id
 }
