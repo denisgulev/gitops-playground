@@ -1,9 +1,12 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/acm_certificate
 resource "aws_acm_certificate" "ssl_cert" {
-  provider                  = aws.acm_provider
-  domain_name               = "static-web.${var.domain_name}"
-  subject_alternative_names = ["*.static-web.${var.domain_name}"]
-  validation_method         = "DNS"
+  provider    = aws.acm_provider
+  domain_name = "static-web.${var.domain_name}"
+  subject_alternative_names = [
+    "*.static-web.${var.domain_name}",
+    "api.${var.domain_name}"
+  ]
+  validation_method = "DNS"
 
   tags = var.common_tags
 
