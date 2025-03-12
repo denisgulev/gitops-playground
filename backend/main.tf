@@ -29,7 +29,9 @@ resource "aws_instance" "flask_app" {
   associate_public_ip_address = true
   key_name                    = "flask-key"
 
-  user_data = file("${path.module}/user_data.sh")
+  user_data = templatefile("${path.module}/user_data.sh", {
+    aws_region = var.aws_region
+  })
 
   tags = {
     Name = "FlaskAppEC2"
