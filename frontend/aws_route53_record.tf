@@ -6,7 +6,7 @@ data "aws_route53_zone" "existing" {
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record
 resource "aws_route53_record" "root_a" {
   zone_id = data.aws_route53_zone.existing.zone_id
-  name    = "static-web.${var.domain_name}"
+  name    = "${local.prefix}.${var.domain_name}"
   type    = "A"
   alias {
     name                   = aws_cloudfront_distribution.s3_distribution.domain_name
@@ -17,7 +17,7 @@ resource "aws_route53_record" "root_a" {
 
 resource "aws_route53_record" "www_a" {
   zone_id = data.aws_route53_zone.existing.zone_id
-  name    = "www.static-web.${var.domain_name}"
+  name    = "www.${local.prefix}.${var.domain_name}"
   type    = "A"
 
   alias {

@@ -11,17 +11,17 @@ resource "aws_cloudfront_origin_access_control" "current" {
 resource "aws_cloudfront_distribution" "s3_distribution" {
   origin {
     domain_name              = data.aws_s3_bucket.static_website.bucket_regional_domain_name
-    origin_id                = "static-web.${var.bucket_name}-origin"
+    origin_id                = "${local.prefix}.${var.bucket_name}-origin"
     origin_access_control_id = aws_cloudfront_origin_access_control.current.id
   }
-  comment         = "static-web.${var.domain_name} distribution"
+  comment         = "${local.prefix}.${var.domain_name} distribution"
   enabled         = true
   is_ipv6_enabled = true
   http_version    = "http2and3"
   price_class     = "PriceClass_100" // Use only North America and Europe
   aliases = [
-    "static-web.${var.domain_name}",
-    "www.static-web.${var.domain_name}"
+    "${local.prefix}.${var.domain_name}",
+    "www.${local.prefix}.${var.domain_name}"
   ]
   default_root_object = "index.html"
 
@@ -31,7 +31,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods         = ["GET", "HEAD"]
     compress               = true
-    target_origin_id       = "static-web.${var.bucket_name}-origin"
+    target_origin_id       = "${local.prefix}.${var.bucket_name}-origin"
 
     function_association {
       event_type   = "viewer-request"

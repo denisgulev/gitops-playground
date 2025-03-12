@@ -21,7 +21,29 @@
 <body>
     <h1>Welcome to My Static Website</h1>
     <p>This website is hosted on an Amazon S3 bucket.</p>
-    <p>Updated Page</p>
+    <div>
+        <h1>Test Flask Backend</h1>
+        <button onclick="callApi()">Call API</button>
+        <p id="response"></p>
+    </div>
+
+    <script>
+        async function callApi() {
+            const responseElement = document.getElementById('response');
+            try {
+                const response = await fetch('http://api.denisgulev.com/', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.text();
+                responseElement.textContent = data;
+            } catch (error) {
+                responseElement.textContent = 'Error calling API: ' + error;
+            }
+        }
+    </script>
 </body>
 
 </html>
