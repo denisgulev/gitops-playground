@@ -14,6 +14,19 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     origin_id                = "${local.prefix}.${var.bucket_name}-origin"
     origin_access_control_id = aws_cloudfront_origin_access_control.current.id
   }
+
+  origin {
+    domain_name = aws_instance.imported_instance.public_dns
+    origin_id   = "EC2-origin"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only" # or "match-viewer" if you want to enforce HTTPS for certain viewers
+      origin_ssl_protocols   = ["TLSv1.2"] # For HTTPS, if you configure SSL on EC2
+    }
+  }
+
   comment         = "${local.prefix}.${var.domain_name} distribution"
   enabled         = true
   is_ipv6_enabled = true
@@ -26,8 +39,18 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   ]
   default_root_object = "index.html"
 
+  # Cache Behavior for EC2-origin (API endpoints)
+  ordered_cache_behavior {
+    path_pattern           = "/api/*"
+    target_origin_id       = "EC2-origin"
+    viewer_protocol_policy = "redirect-to-https"
+
+    allowed_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    cached_methods  = ["GET", "HEAD"]
+  }
+
+  # Cache Behavior for EC2 (dynamic content, API)
   default_cache_behavior {
-    cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods         = ["GET", "HEAD"]
@@ -60,4 +83,12 @@ resource "aws_cloudfront_function" "www_redirect" {
   runtime = "cloudfront-js-1.0"
   code    = file("./cloudfront_function.js")
   publish = true
+}
+
+import {
+  to = aws_instance.imported_instance
+  id = var.ec2_instance_id
+}
+
+resource "aws_instance" "imported_instance" {
 }

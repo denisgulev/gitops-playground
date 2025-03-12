@@ -22,3 +22,8 @@ variable "common_tags" {
   type        = map(string)
   description = "Common tags for all resources"
 }
+
+variable "ec2_instance_id" {
+  type        = string
+  description = "ID of the EC2 instance"
+}

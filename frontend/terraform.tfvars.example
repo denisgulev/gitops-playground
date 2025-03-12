@@ -2,6 +2,7 @@ aws_region  = ""
 prefix      = ""
 domain_name = ""
 bucket_name = ""
+ec2_instance_id = ""
 
 common_tags = {
   ManagedBy = ""
