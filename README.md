@@ -24,7 +24,7 @@ The backend service is deployed on a single EC2 instance running a simple Python
 All infrastructure components — from networking to compute and security — are fully managed and provisioned using Infrastructure as Code (IaC) through Terraform, ensuring consistent, repeatable, and easily maintainable deployments.
 
 The backend app is described in detail in the following article:  
-[Deploy an EC2 Instance with internet access](https://denisgulev.com/static-website-with-aws-s3-cloudfront-and-terraform/).
+[Deploy an EC2 Instance with internet access](https://denisgulev.com/deploy-flask-backend-on-aws-ec2-with-terraform/).
 
 ### Architecture Components
 - **EC2 Instance**: Hosts a Flask application.
