@@ -51,6 +51,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 
   # Cache Behavior for EC2 (dynamic content, API)
   default_cache_behavior {
+    cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods         = ["GET", "HEAD"]
