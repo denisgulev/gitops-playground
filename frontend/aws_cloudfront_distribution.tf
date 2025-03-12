@@ -21,7 +21,8 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   price_class     = "PriceClass_100" // Use only North America and Europe
   aliases = [
     "${local.prefix}.${var.domain_name}",
-    "www.${local.prefix}.${var.domain_name}"
+    "www.${local.prefix}.${var.domain_name}",
+    "api.${var.domain_name}"
   ]
   default_root_object = "index.html"
 
