@@ -41,7 +41,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 
   # Cache Behavior for API (EC2)
   ordered_cache_behavior {
-    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    cache_policy_id        = aws_cloudfront_cache_policy.api_cache_policy.id
     path_pattern           = "/api/*"
     target_origin_id       = "EC2-origin"
     viewer_protocol_policy = "allow-all"
@@ -52,7 +52,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 
   # Default Cache Behavior for Static Content (S3)
   default_cache_behavior {
-    cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods         = ["GET", "HEAD"]
@@ -78,6 +78,34 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   tags = var.common_tags
 }
 
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_cache_policy
+resource "aws_cloudfront_cache_policy" "api_cache_policy" {
+  name = "api-cache-policy-cors"
+
+  default_ttl = 0 # Don't cache for long to avoid stale CORS responses
+  max_ttl     = 10
+  min_ttl     = 0
+
+  parameters_in_cache_key_and_forwarded_to_origin {
+    headers_config {
+      header_behavior = "whitelist"
+      headers {
+        items = [
+          "Access-Control-Request-Headers",
+          "Access-Control-Request-Method",
+          "Origin"
+        ]
+      }
+    }
+    cookies_config {
+      cookie_behavior = "none" # If you use cookies in API, otherwise "none"
+    }
+    query_strings_config {
+      query_string_behavior = "none" # If your API uses query params
+    }
+  }
+}
+
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_function
 resource "aws_cloudfront_function" "www_redirect" {
   name    = "${local.prefix}-www-redirect"
@@ -90,3 +118,4 @@ resource "aws_cloudfront_function" "www_redirect" {
 data "aws_instance" "imported_instance" {
   instance_id = var.ec2_instance_id
 }
+
