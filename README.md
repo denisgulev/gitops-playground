@@ -35,11 +35,11 @@ Key CloudFront settings:
 ### CORS Handling — API (EC2 with Flask)
 
 Initially:
-	•	CORS issues when frontend called backend via CloudFront.
-	•	Missing preflight (OPTIONS) response support.
+- CORS issues when frontend called backend via CloudFront.
+- Missing preflight (OPTIONS) response support.
 
 ✅ Resolved by:
-	•	Adding Flask-CORS, correctly configured:
+- Adding Flask-CORS, correctly configured:
   ```python
     CORS(app, 
       origins=["https://static-website.example.com"], 
