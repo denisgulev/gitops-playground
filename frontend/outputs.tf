@@ -23,6 +23,6 @@ output "cloudfront_url" {
 
 output "website_url" {
   description = "Website URL (HTTPS)"
-  value       = "https://static-web.${var.domain_name}"
+  value       = "https://${local.prefix}.${var.domain_name}"
   sensitive   = true
 }

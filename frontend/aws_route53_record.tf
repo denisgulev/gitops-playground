@@ -44,7 +44,7 @@ resource "aws_route53_record" "www_redirect" {
   name    = "www.${var.domain_name}"
   type    = "CNAME"
   ttl     = 300
-  records = ["${var.domain_name}"]
+  records = [var.domain_name]
 }
 
 resource "aws_route53_record" "www_redirect_static" {
