@@ -39,14 +39,6 @@ resource "aws_route53_record" "root_domain" {
   }
 }
 
-resource "aws_route53_record" "www_redirect" {
-  zone_id = data.aws_route53_zone.existing.zone_id
-  name    = "www.${var.domain_name}"
-  type    = "CNAME"
-  ttl     = 300
-  records = [var.domain_name]
-}
-
 resource "aws_route53_record" "www_redirect_static" {
   zone_id = data.aws_route53_zone.existing.zone_id
   name    = "www.${local.prefix}.${var.domain_name}"
