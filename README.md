@@ -6,6 +6,73 @@ A boilerplate Terraform template that provisions a frontend app through static w
 
 This repository contains Terraform templates that help you quickly deploy a frontend static website and a backend service using AWS infrastructure. The frontend app is served via AWS S3, CloudFront for content delivery, and Route 53 for DNS management. 
 
+### Architecture
+
+- **Static Frontend** (S3 bucket) served via CloudFront.
+- **API Backend** (EC2 running Flask) also served via same CloudFront under /api/* path pattern.
+- CloudFront sits in front of both S3 (static) and EC2 (API) using multiple **origins** setup. We setup a "Cloudfront-function" to strip domain from "www.".
+- **Route53 DNS** handles domain names and subdomains (static-website.example.com, api.example.com).
+
+### CloudFront Setup — Multiple Origins
+
+Two origins are configured inside one CloudFront distribution:
+- Origin 1 (S3): Static site.
+- Origin 2 (EC2): API.
+
+Key CloudFront settings:
+1. **default_cache_behavior**: Handles static content (targeting S3).
+2. **ordered_cache_behavior** with path_pattern = "/api/*": Routes API calls to EC2.
+3. Attached cache policies and viewer protocol policies for both.
+4. **CloudFront Function** for www redirection.
+
+### Route53 Records — Proper Domain Routing
+1. A record for static-website.example.com -> CloudFront distribution.
+2. A record for api.example.com -> Same CloudFront distribution (CloudFront routes to correct origin via /api/* pattern).
+3. CNAME for www.static-website.example.com pointing to static-website.example.com for redirect.
+
+**Note: Both frontend and backend share CloudFront, but routing depends on path and/or subdomain.
+
+### CORS Handling — API (EC2 with Flask)
+
+Initially:
+	•	CORS issues when frontend called backend via CloudFront.
+	•	Missing preflight (OPTIONS) response support.
+
+✅ Resolved by:
+	•	Adding Flask-CORS, correctly configured:
+  ```python
+    CORS(app, 
+      origins=["https://static-website.example.com"], 
+      supports_credentials=True,
+      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      allow_headers=["Content-Type", "Authorization"])
+  ```
+
+### Security Groups — Restricting EC2 to CloudFront
+
+Ideally we want to restrict access to EC" only for requests coming from the CloudFront.
+Currently i am setting manually this, by choosing the **prefix list** of CloudFront.
+
+🚀 **Next Steps**
+
+Automate the usage of this prefix list through AWS lamdba, which will update the security group with the update prefix list of CloudFront.
+
+### Terraform Workspaces — Cross-workspace Resources Issue
+
+Problem:
+- EC2 instance managed in a separate Terraform workspace/project.
+- CloudFront defined in another workspace needs to use EC2’s public DNS as an origin.
+
+✅ Solution:
+- Save EC2 instance as terraform variable in the workspace we want to reference the instance.
+- Reference EC2’s public DNS
+  ```hcl
+    data "aws_instance" "imported_instance" {
+      instance_id = var.ec2_instance_id
+    }
+  ```
+➡️ **Note**: If EC2 is modified in its own workspace, updates won’t propagate unless you re-import or manage the resource cross-workspace properly (e.g., through Terraform Cloud workspaces or outputs).
+
 ## Frontend Setup
 
 The static frontend app is described in detail in the following article:  
@@ -61,7 +128,7 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
 
 ## 📌 Future Developments  
 
-- **Connect the Static Frontend with the Backend API**  
+- <strike>**Connect the Static Frontend with the Backend API**</strike> - **DONE**
   - Expose backend API under a proper domain (e.g., `api.example.com`).  
   - Configure CORS settings to allow frontend-backend communication.  
   - Update frontend to interact with backend endpoints.  

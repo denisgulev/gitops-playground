@@ -1,6 +1,7 @@
 resource "aws_vpc" "main_vpc" {
-  cidr_block       = "10.0.0.0/16"
-  instance_tenancy = "default"
+  cidr_block           = "10.0.0.0/16"
+  instance_tenancy     = "default"
+  enable_dns_hostnames = true
 
   tags = {
     Name = "MainVPC"
@@ -65,25 +66,36 @@ resource "aws_security_group" "flask_sg" {
   }
 }
 
-resource "aws_vpc_security_group_ingress_rule" "sg_ingress" {
+resource "aws_vpc_security_group_ingress_rule" "sg_ingress_http" {
   security_group_id = aws_security_group.flask_sg.id
 
-  from_port   = 80
-  to_port     = 80
-  ip_protocol = "tcp"
-  cidr_ipv4   = "0.0.0.0/0"
-  description = "FROM THE INTERNET"
+  from_port      = 80
+  to_port        = 80
+  ip_protocol    = "tcp"
+  prefix_list_id = "pl-3b927c52"
+  description    = "FROM THE INTERNET - HTTP"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "sg_ingress_ssh" {
+resource "aws_vpc_security_group_ingress_rule" "sg_ingress_https" {
   security_group_id = aws_security_group.flask_sg.id
 
-  from_port   = 22
-  to_port     = 22
-  ip_protocol = "tcp"
-  cidr_ipv4   = "0.0.0.0/0"
-  description = "SSH Access"
+  from_port      = 443
+  to_port        = 443
+  ip_protocol    = "tcp"
+  prefix_list_id = "pl-3b927c52"
+  description    = "FROM THE INTERNET - HTTPS"
 }
+
+# to be enabled when needed; best use it to allow only a specific IP or a range of IPs
+# resource "aws_vpc_security_group_ingress_rule" "sg_ingress_ssh" {
+#   security_group_id = aws_security_group.flask_sg.id
+
+#   from_port   = 22
+#   to_port     = 22
+#   ip_protocol = "tcp"
+#   cidr_ipv4   = "0.0.0.0/0"
+#   description = "SSH Access"
+# }
 
 resource "aws_vpc_security_group_egress_rule" "sg_egress" {
   security_group_id = aws_security_group.flask_sg.id

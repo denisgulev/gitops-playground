@@ -22,7 +22,11 @@ from flask import request
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, 
+     origins=["https://static-website.denisgulev.com"], 
+     supports_credentials=True,
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization"])
 
 # Configuring Logger to Use CloudWatch
 LOGGER = logging.getLogger(__name__)
@@ -39,12 +43,13 @@ def after_request(response):
     LOGGER.error('%s %s %s %s %s %s', timestamp, request.remote_addr, request.method, request.scheme, request.full_path, response.status)
     return response
 
-@app.route('/')
+@app.route('/api/hello')
 def hello():
+    LOGGER.info("Calling /api/hello")
     return "Hello from Flask behind Nginx!"
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000)
+    app.run(host='0.0.0.0', port=5000)
 EOT
 
 # Create systemd service for Flask using Gunicorn (production-grade WSGI)
@@ -58,7 +63,7 @@ User=ec2-user
 Group=ec2-user
 WorkingDirectory=/home/ec2-user
 EnvironmentFile=/etc/environment
-ExecStart=/usr/local/bin/gunicorn --workers 3 --bind 127.0.0.1:5000 app:app
+ExecStart=/usr/local/bin/gunicorn --workers 3 --bind 0.0.0.0:5000 app:app
 
 [Install]
 WantedBy=multi-user.target
