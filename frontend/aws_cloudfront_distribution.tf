@@ -42,7 +42,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   # Cache Behavior for API (EC2)
   ordered_cache_behavior {
     cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
-    path_pattern           = "/*"
+    path_pattern           = "/api/*"
     target_origin_id       = "EC2-origin"
     viewer_protocol_policy = "allow-all"
 
