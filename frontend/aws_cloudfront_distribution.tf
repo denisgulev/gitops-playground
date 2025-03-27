@@ -16,7 +16,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   }
 
   origin {
-    domain_name = data.aws_instance.imported_instance.public_dns
+    domain_name = local.ec2_dns
     origin_id   = "EC2-origin"
 
     custom_origin_config {
@@ -115,7 +115,11 @@ resource "aws_cloudfront_function" "www_redirect" {
   publish = true
 }
 
-data "aws_instance" "imported_instance" {
-  instance_id = var.ec2_instance_id
+data "aws_ssm_parameter" "ec2_dns" {
+  name = "/infra/ec2/public_dns"
 }
 
+resource "local_file" "index_html" {
+  content  = templatefile("${path.module}/index.html", { ec2_dns = data.aws_ssm_parameter.ec2_dns.value })
+  filename = "${path.module}/index.html"
+}

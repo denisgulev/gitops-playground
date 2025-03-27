@@ -31,7 +31,7 @@
         async function callApi() {
             const responseElement = document.getElementById('response');
             try {
-                const response = await fetch('https://api.denisgulev.com/api/hello', {
+                const response = await fetch('http://${ec2_dns}/api/hello', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json'
@@ -40,7 +40,8 @@
                 const data = await response.text();
                 responseElement.textContent = data;
             } catch (error) {
-                responseElement.textContent = 'Error calling API: ' + error;
+                console.warn(`API call failed: ${url}`, error);
+                responseElement.innerHTML = "<span class='error'>Both APIs are unreachable. Please try again later.</span>";
             }
         }
     </script>

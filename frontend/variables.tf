@@ -23,7 +23,7 @@ variable "common_tags" {
   description = "Common tags for all resources"
 }
 
-variable "ec2_instance_id" {
-  type        = string
-  description = "ID of the EC2 instance"
+variable "ec2_dns" {
+  type    = string
+  default = "fallback.example.com"
 }
