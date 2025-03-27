@@ -41,7 +41,7 @@
                 const data = await response.text();
                 responseElement.textContent = data;
             } catch (error) {
-                console.warn(`API call failed: ${url}`, error);
+                console.warn('API call failed: ', url, error);
                 responseElement.innerHTML = "<span class='error'>Both APIs are unreachable. Please try again later.</span>";
             }
         }
