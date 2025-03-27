@@ -30,8 +30,9 @@
     <script>
         async function callApi() {
             const responseElement = document.getElementById('response');
+            const url = 'http://${ec2_dns}/api/hello';
             try {
-                const response = await fetch('http://${ec2_dns}/api/hello', {
+                const response = await fetch(url, {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json'
