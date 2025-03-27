@@ -120,6 +120,6 @@ data "aws_ssm_parameter" "ec2_dns" {
 }
 
 resource "local_file" "index_html" {
-  content  = templatefile("${path.module}/index.html", { ec2_dns = data.aws_ssm_parameter.ec2_dns.value })
-  filename = "${path.module}/index.html"
+  content  = templatefile("${local.dist_dir}/index.html", { ec2_dns = data.aws_ssm_parameter.ec2_dns.value })
+  filename = "${local.dist_dir}/index.html"
 }
