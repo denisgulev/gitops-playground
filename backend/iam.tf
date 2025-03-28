@@ -43,3 +43,45 @@ resource "aws_iam_role_policy" "cloudwatch_write" {
     ]
   })
 }
+
+resource "aws_iam_role" "prefix_list_access_role" {
+  name = "PrefixListAccessRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      },
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "prefix_list_access_profile" {
+  name = "prefix-list-access-profile"
+  role = aws_iam_role.prefix_list_access_role.name
+}
+
+resource "aws_iam_role_policy" "prefix_list_access_policy" {
+  name = "prefix_list_access_policy"
+  role = aws_iam_role.prefix_list_access_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "ec2:DescribeManagedPrefixLists",
+          "ec2:GetManagedPrefixListEntries"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+    ]
+  })
+}

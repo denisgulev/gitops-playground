@@ -9,24 +9,18 @@ echo "AWS_DEFAULT_REGION=${aws_region}" >> /etc/environment
 source /etc/environment
 
 # Install Flask
-pip3 install flask gunicorn watchtower flask-cors
+pip3 install flask gunicorn watchtower
 
 # Create Flask App
 cat <<EOT > /home/ec2-user/app.py
-from flask import Flask
+from flask import Flask, jsonify
 
 import watchtower
 import logging
 from time import strftime
 from flask import request
-from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app, 
-     origins=["https://static-website.denisgulev.com"], 
-     supports_credentials=True,
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-     allow_headers=["Content-Type", "Authorization"])
 
 # Configuring Logger to Use CloudWatch
 LOGGER = logging.getLogger(__name__)
@@ -39,14 +33,13 @@ LOGGER.info("***testing logs***")
 
 @app.after_request
 def after_request(response):
-    timestamp = strftime('[%Y-%b-%d %H:%M]')
-    LOGGER.error('%s %s %s %s %s %s', timestamp, request.remote_addr, request.method, request.scheme, request.full_path, response.status)
     return response
 
 @app.route('/api/hello')
 def hello():
     LOGGER.info("Calling /api/hello")
-    return "Hello from Flask behind Nginx!"
+    response = jsonify(message="Hello from Flask behind Nginx!")
+    return response
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
@@ -78,14 +71,36 @@ systemctl enable flaskapp
 cat <<EOT > /etc/nginx/conf.d/flaskapp.conf
 server {
     listen 80;
-    server_name _;
+    server_name ${api_domain};
 
     location / {
-        proxy_pass http://127.0.0.1:5000;
+        # Explicitly allow OPTIONS method
+        limit_except GET POST OPTIONS {
+            deny all;
+        }
+
+        # Handle OPTIONS requests
+        if (\$request_method = 'OPTIONS') {
+            access_log /var/log/nginx/options_requests.log;
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+            add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
+            add_header 'Access-Control-Allow-Origin' 'https://static-website.denisgulev.com' always;
+            add_header 'Access-Control-Max-Age' 1728000;
+            add_header 'Content-Type' 'text/plain charset=UTF-8';
+            add_header 'Content-Length' 0;
+            return 204;
+        }
+
+        # CORS headers
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
+        add_header 'Access-Control-Allow-Origin' 'https://static-website.denisgulev.com' always;
+
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_pass http://localhost:5000;
     }
 }
 EOT

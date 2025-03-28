@@ -56,33 +56,43 @@ resource "aws_subnet" "private_subnet_2" {
   }
 }
 
-resource "aws_security_group" "flask_sg" {
-  name        = "flask-sg"
+resource "aws_security_group" "flask_sg_http" {
+  name        = "flask-sg-http"
   description = "Allow inbound traffic on port 80"
   vpc_id      = aws_vpc.main_vpc.id
 
   tags = {
-    Name = "FlaskSG"
+    Name = "FlaskSGhttp"
+  }
+}
+
+resource "aws_security_group" "flask_sg_https" {
+  name        = "flask-sg-https"
+  description = "Allow inbound traffic on port 443"
+  vpc_id      = aws_vpc.main_vpc.id
+
+  tags = {
+    Name = "FlaskSGhttps"
   }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "sg_ingress_http" {
-  security_group_id = aws_security_group.flask_sg.id
+  security_group_id = aws_security_group.flask_sg_http.id
 
   from_port      = 80
   to_port        = 80
   ip_protocol    = "tcp"
-  prefix_list_id = "pl-3b927c52"
+  prefix_list_id = data.aws_ec2_managed_prefix_list.cloudfront.id
   description    = "FROM THE INTERNET - HTTP"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "sg_ingress_https" {
-  security_group_id = aws_security_group.flask_sg.id
+  security_group_id = aws_security_group.flask_sg_https.id
 
   from_port      = 443
   to_port        = 443
   ip_protocol    = "tcp"
-  prefix_list_id = "pl-3b927c52"
+  prefix_list_id = data.aws_ec2_managed_prefix_list.cloudfront.id
   description    = "FROM THE INTERNET - HTTPS"
 }
 
@@ -97,8 +107,16 @@ resource "aws_vpc_security_group_ingress_rule" "sg_ingress_https" {
 #   description = "SSH Access"
 # }
 
-resource "aws_vpc_security_group_egress_rule" "sg_egress" {
-  security_group_id = aws_security_group.flask_sg.id
+resource "aws_vpc_security_group_egress_rule" "sg_egress_http" {
+  security_group_id = aws_security_group.flask_sg_http.id
+
+  ip_protocol = "-1"
+  cidr_ipv4   = "0.0.0.0/0"
+  description = "allow outbound traffic"
+}
+
+resource "aws_vpc_security_group_egress_rule" "sg_egress_https" {
+  security_group_id = aws_security_group.flask_sg_https.id
 
   ip_protocol = "-1"
   cidr_ipv4   = "0.0.0.0/0"
@@ -138,4 +156,9 @@ resource "aws_route_table_association" "public_subnet_1_assoc" {
 resource "aws_route_table_association" "public_subnet_2_assoc" {
   subnet_id      = aws_subnet.public_subnet_2.id
   route_table_id = aws_route_table.public_rt.id
+}
+
+# Data source to fetch the CloudFront prefix list
+data "aws_ec2_managed_prefix_list" "cloudfront" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
 }
