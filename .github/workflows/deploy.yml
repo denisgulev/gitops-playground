@@ -66,10 +66,10 @@ jobs:
           aws-region: eu-south-1
 
       - name: Sync to S3
-        run: aws s3 sync . s3://your-bucket-name --delete
+        run: aws s3 sync . s3://${{ secrets.BUCKET_NAME }} --delete
 
       - name: Invalidate CloudFront Cache
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id YOUR_DIST_ID \
+            --distribution-id ${{ secrets.DISTRIBUTION_ID }} \
             --paths "/*"
