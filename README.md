@@ -222,7 +222,7 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
   - Update frontend to interact with backend endpoints.  
 
 - **Implement CI/CD Pipelines for Frontend and Backend**  
-  - Automate frontend deployments (S3 + CloudFront invalidation) using GitHub Actions
+  - Automate frontend deployments (S3 + CloudFront invalidation) using GitHub Actions. 
   - Automate backend EC2 updates and infrastructure changes via Terraform pipelines.  
   - Ensure zero-downtime deployments and rollback mechanisms.  
 
