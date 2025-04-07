@@ -120,6 +120,6 @@ data "aws_ssm_parameter" "ec2_dns" {
 }
 
 resource "local_file" "index_html" {
-  content  = templatefile("${local.dist_dir}/index.html", { api_domain = aws_route53_record.api.fqdn })
+  content  = templatefile("${local.dist_dir}/../static/index.html", { api_domain = aws_route53_record.api.fqdn })
   filename = "${local.dist_dir}/index.html"
 }
