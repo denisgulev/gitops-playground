@@ -1,5 +1,5 @@
 # Local .terraform directories
-frontend/.terraform/
+frontend/infra/.terraform/
 backend/.terraform/
 
 # .tfstate files
