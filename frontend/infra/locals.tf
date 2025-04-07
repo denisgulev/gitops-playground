@@ -16,10 +16,7 @@ locals {
     ".png" : "image/png",
     ".gif" : "image/gif",
     ".svg" : "image/svg+xml",
-    ".webp" : "image/webp",
     ".ico" : "image/x-icon",
-    ".woff" : "font/woff",
-    ".woff2" : "font/woff2",
     ".ttf" : "font/ttf",
     ".eot" : "application/vnd.ms-fontobject",
     ".otf" : "font/otf"
