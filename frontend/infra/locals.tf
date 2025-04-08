@@ -16,7 +16,6 @@ locals {
     ".gif" : "image/gif",
     ".svg" : "image/svg+xml",
     ".ico" : "image/x-icon",
-    ".eot" : "application/vnd.ms-fontobject",
-    ".otf" : "font/otf"
+    ".eot" : "application/vnd.ms-fontobject"
   }
 }
