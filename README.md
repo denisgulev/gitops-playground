@@ -171,6 +171,11 @@ The process begins when a pull request (PR) is created with changes to the **fro
 
 Static files (HTML, CSS, JS) are automatically deployed to an S3 bucket when committed to the **frontend/static/** directory.
 
+### Automate backend EC2 updates and infrastructure changes via GitHub Actions
+
+The process is similar to the one for the frontend flow.
+When a pull request (PR) is created with changes to the **backend/** directory. Upon PR creation, a Terraform Plan (Backend) is automatically executed, evaluating the infrastructure changes without applying them. A reviewer can then add a **ready-for-tf-apply** label to the PR, which triggers the Terraform Apply (Backend) workflow to apply the approved changes. 
+
 ## Frontend Setup
 
 The static frontend app is described in detail in the following article:  
