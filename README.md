@@ -159,6 +159,18 @@ Problem:
 
   ```
 
+### Automate Frontend Deployments — Both Infrastructure and Static Files
+
+To streamline frontend deployments, we implemented a GitHub Actions workflow that automates the management of both infrastructure and static files. 
+
+#### Infrastructure
+
+The process begins when a pull request (PR) is created with changes to the **frontend/infra/** directory. Upon PR creation, a Terraform Plan is automatically executed, evaluating the infrastructure changes without applying them. A reviewer can then add a **ready-for-tf-apply** label to the PR, which triggers the Terraform Apply workflow to apply the approved changes. 
+
+#### Static Files
+
+Static files (HTML, CSS, JS) are automatically deployed to an S3 bucket when committed to the **frontend/static/** directory.
+
 ## Frontend Setup
 
 The static frontend app is described in detail in the following article:  
@@ -223,7 +235,7 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
 
 - **Implement CI/CD Pipelines for Frontend and Backend**  
   - Automate frontend deployments (S3 + CloudFront invalidation) using GitHub Actions. 
-  - Automate backend EC2 updates and infrastructure changes via Terraform pipelines.  
+  - Automate backend EC2 updates and infrastructure changes via <strike>Terraform pipelines</strike> GitHub Actions.  
   - Ensure zero-downtime deployments and rollback mechanisms.  
 
 - **Add Monitoring, Logging, and Alerts**  
