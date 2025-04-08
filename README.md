@@ -176,14 +176,14 @@ Static files (HTML, CSS, JS) are automatically deployed to an S3 bucket when com
 The process is similar to the one for the frontend flow.
 When a pull request (PR) is created with changes to the **backend/** directory. Upon PR creation, a Terraform Plan (Backend) is automatically executed, evaluating the infrastructure changes without applying them. A reviewer can then add a **ready-for-tf-apply** label to the PR, which triggers the Terraform Apply (Backend) workflow to apply the approved changes. 
 
-#### Notes on how deployments works
+#### *Notes on how deployments works*
 
-A user works on changes in a separate branch; when the changes are finished he creates a PR to the main branch and this operation triggers different actions:
-1. at first the action for **Terraform Plan** is executed (there are separate actions for frontend and backend)
-2. if the plan is successfull and reviewed, then a reviewer can assign the label "ready-for-tf-apply" to the PR
-3. once the label is attached, the corresponding action for **Terraform Apply** process is triggered
-4. if the plan is not accepted by a reviewer, he can leave a comment with the fixes to be done in order for him to accept the changes
-5. after the action with **Terraform Apply** is finished successfully, the merge can be concluded
+Developers begin by working on changes in a dedicated feature branch. Once the work is complete, they open a pull request targeting the main branch. This initiates a structured deployment process:
+1.	A Terraform Plan action is triggered automatically to preview infrastructure changes (handled separately for frontend and backend).
+2.	If the plan succeeds and the proposed changes look good, a reviewer can apply the ready-for-tf-apply label to the PR.
+3.	Adding this label triggers the corresponding Terraform Apply workflow to apply the infrastructure changes.
+4.	If the plan reveals issues or requires improvements, the reviewer can leave feedback as a comment instead of applying the label.
+5.	Once Terraform Apply completes successfully, the pull request is ready to be merged into the main branch.
 
 ## Frontend Setup
 
