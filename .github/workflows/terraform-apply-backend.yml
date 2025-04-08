@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   terraform-apply:
-    name: Terraform Apply
+    name: Terraform Apply (Backend)
     runs-on: ubuntu-latest
     defaults:
       run:
