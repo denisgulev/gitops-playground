@@ -1,0 +1,49 @@
+name: Terraform Apply (Backend)
+
+on:
+  pull_request:
+    types:
+      - labeled   # Trigger when a label is added or removed
+    paths:
+      - 'backend/**'
+
+permissions:
+  contents: read
+
+jobs:
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Check if label 'ready-for-tf-apply' is added, PR targets 'main' branch, and paths are modified
+        if: |
+          contains(github.event.pull_request.labels.*.name, 'ready-for-tf-apply') && 
+          (github.event.pull_request.base.ref == 'main') &&
+          (github.event.pull_request.head.ref != github.event.pull_request.base.ref)
+        run: |
+          echo "Label 'ready-for-tf-apply' was added to the PR, targeting 'main' branch, and the specified paths are changed."
+
+      - name: Notify when label 'ready-for-tf-apply' is not present, branch is not 'main', or paths are not changed
+        if: |
+          !contains(github.event.pull_request.labels.*.name, 'ready-for-tf-apply') || 
+          (github.event.pull_request.base.ref != 'main') ||
+          github.event.pull_request.head.ref == github.event.pull_request.base.ref
+        run: |
+          echo "Either label 'ready-for-tf-apply' is not added, PR is not targeting 'main' branch, or paths are not changed."
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
