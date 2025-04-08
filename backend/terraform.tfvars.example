@@ -1,0 +1,5 @@
+aws_region     = ""
+instance_type  = ""
+domain_name    = ""
+subdomain      = ""
+hosted_zone_id = ""

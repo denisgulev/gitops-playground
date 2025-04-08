@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   terraform-plan:
-    name: Terraform Plan and Validate
+    name: Terraform Plan and Validate (Backend)
     runs-on: ubuntu-latest
     defaults:
       run:
