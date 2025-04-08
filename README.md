@@ -247,10 +247,9 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
   - Configure CORS settings to allow frontend-backend communication.  
   - Update frontend to interact with backend endpoints.  
 
-- **Implement CI/CD Pipelines for Frontend and Backend**  
+- <strike>**Implement CI/CD Pipelines for Frontend and Backend**</strike> - **DONE**
   - Automate frontend deployments (S3 + CloudFront invalidation) using GitHub Actions. 
-  - Automate backend EC2 updates and infrastructure changes via <strike>Terraform pipelines</strike> GitHub Actions.  
-  - Ensure zero-downtime deployments and rollback mechanisms.  
+  - Automate backend EC2 updates and infrastructure changes via GitHub Actions.  
 
 - **Add Monitoring, Logging, and Alerts**  
   - Enable detailed **CloudWatch Logs** for backend (Nginx, Gunicorn, Flask).  
