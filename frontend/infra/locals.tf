@@ -10,14 +10,12 @@ locals {
     ".css" : "text/css",
     ".js" : "application/javascript",
     ".json" : "application/json",
-    ".xml" : "application/xml",
     ".jpg" : "image/jpeg",
     ".jpeg" : "image/jpeg",
     ".png" : "image/png",
     ".gif" : "image/gif",
     ".svg" : "image/svg+xml",
     ".ico" : "image/x-icon",
-    ".ttf" : "font/ttf",
     ".eot" : "application/vnd.ms-fontobject",
     ".otf" : "font/otf"
   }
