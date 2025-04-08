@@ -1,4 +1,4 @@
-name: Terraform Apply (Manual)
+name: Terraform Apply
 
 on:
   pull_request:
