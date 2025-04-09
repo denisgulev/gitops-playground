@@ -28,6 +28,7 @@ resource "aws_instance" "flask_app" {
   iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
   associate_public_ip_address = true
   key_name                    = "flask-key"
+  user_data_replace_on_change = true
 
   user_data = templatefile("${path.module}/user_data.sh", {
     aws_region = var.aws_region,
