@@ -5,7 +5,7 @@ on:
     types:
       - labeled   # Trigger when a label is added or removed
     paths:
-      - 'backend/**'
+      - 'backend/infra/**'
 
 permissions:
   contents: read
