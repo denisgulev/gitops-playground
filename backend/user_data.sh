@@ -18,7 +18,7 @@ from flask import Flask, jsonify
 import watchtower
 import logging
 from time import strftime
-from flask import request
+from flask import request, redirect
 
 app = Flask(__name__)
 
@@ -40,6 +40,11 @@ def hello():
     LOGGER.info("Calling /api/hello")
     response = jsonify(message="Hello from Flask behind Nginx!")
     return response
+
+@app.errorhandler(404)
+def page_not_found(e):
+    LOGGER.warning(f"404 error: {request.path} not found.")
+    return redirect('https://static-website.denisgulev.com/error.html', code=302)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
