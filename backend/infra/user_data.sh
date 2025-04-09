@@ -46,7 +46,7 @@ server {
             access_log /var/log/nginx/options_requests.log;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
             add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
-            add_header 'Access-Control-Allow-Origin' '$${STATIC_ORIGIN}' always;
+            add_header 'Access-Control-Allow-Origin' 'https://static-website.denisgulev.com' always;
             add_header 'Access-Control-Max-Age' 1728000;
             add_header 'Content-Type' 'text/plain charset=UTF-8';
             add_header 'Content-Length' 0;
@@ -55,7 +55,7 @@ server {
 
         add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
         add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
-        add_header 'Access-Control-Allow-Origin' '$${STATIC_ORIGIN}' always;
+        add_header 'Access-Control-Allow-Origin' 'https://static-website.denisgulev.com' always;
 
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
