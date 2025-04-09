@@ -171,10 +171,10 @@ The process begins when a pull request (PR) is created with changes to the **fro
 
 Static files (HTML, CSS, JS) are automatically deployed to an S3 bucket when committed to the **frontend/static/** directory.
 
-### Automate backend EC2 updates and infrastructure changes via GitHub Actions
+### Automate infrastructure changes via GitHub Actions
 
 The process is similar to the one for the frontend flow.
-When a pull request (PR) is created with changes to the **backend/** directory. Upon PR creation, a Terraform Plan (Backend) is automatically executed, evaluating the infrastructure changes without applying them. A reviewer can then add a **ready-for-tf-apply** label to the PR, which triggers the Terraform Apply (Backend) workflow to apply the approved changes. 
+When a pull request (PR) is created with changes to the **backend/infra/** directory. Upon PR creation, a Terraform Plan (Backend) is automatically executed, evaluating the infrastructure changes without applying them. A reviewer can then add a **ready-for-tf-apply** label to the PR, which triggers the Terraform Apply (Backend) workflow to apply the approved changes. 
 
 #### *Notes on how deployments works*
 
@@ -250,6 +250,14 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
 - <strike>**Implement CI/CD Pipelines for Frontend and Backend**</strike> - **DONE**
   - Automate frontend deployments (S3 + CloudFront invalidation) using GitHub Actions. 
   - Automate backend EC2 updates and infrastructure changes via GitHub Actions.  
+
+    - I’ve split the infrastructure from the backend service (Flask app):
+
+      1. The infrastructure code lives in the *backend/infra/* folder. Any PRs to the *main* branch that touch files in this folder will trigger the *terraform-plan-backend.yml* workflow. This kicks off a *terraform plan* process, and if that goes well, you can run *terraform apply* by adding the *ready-for-tf-apply* label to the PR.
+
+      2. The backend service runs in Docker. Whenever changes are made in the *backend/app* folder and a tag is pushed, the *docker-build-push.yml* workflow runs, building a Docker image and pushing it to Docker Hub.
+
+  - (TODO) automate the deployment of docker image inside EC2 instance
 
 - **Add Monitoring, Logging, and Alerts**  
   - Enable detailed **CloudWatch Logs** for backend (Nginx, Gunicorn, Flask).  
