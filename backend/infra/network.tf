@@ -98,7 +98,7 @@ resource "aws_vpc_security_group_ingress_rule" "sg_ingress_https" {
 
 # to be enabled when needed; best use it to allow only a specific IP or a range of IPs
 resource "aws_vpc_security_group_ingress_rule" "sg_ingress_ssh" {
-  security_group_id = aws_security_group.flask_sg.id
+  security_group_id = aws_security_group.flask_sg_http.id
 
   from_port   = 22
   to_port     = 22
