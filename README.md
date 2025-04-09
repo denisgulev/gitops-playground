@@ -1,17 +1,18 @@
-# application-boilerplate
+# Application
 
-A boilerplate Terraform template that provisions a frontend app through static web hosting and a backend service.
+A Terraform-based templates for deploying a frontend app with static web hosting and a backend service.
 
 ## Overview
 
-This repository contains Terraform templates that help you quickly deploy a frontend static website and a backend service using AWS infrastructure. The frontend app is served via AWS S3, CloudFront for content delivery, and Route 53 for DNS management. 
+This repository provides Terraform templates to quickly deploy both a static frontend website and a backend service using AWS infrastructure. The frontend is hosted on AWS S3, with CloudFront for content distribution and Route 53 for DNS management.
+The backend service is a Flask app that runs as docker container inside an EC2 instance.
 
 ### Architecture
 
-- **Static Frontend** (S3 bucket) served via CloudFront.
-- **API Backend** (EC2 running Flask) also served via same CloudFront under /api/* path pattern.
-- CloudFront sits in front of both S3 (static) and EC2 (API) using multiple **origins** setup. We setup a "Cloudfront-function" to strip domain from "www.".
-- **Route53 DNS** handles domain names and subdomains (static-website.example.com, api.example.com).
+- **Static Frontend**: Hosted on an S3 bucket, served via CloudFront.
+- **API Backend**: Running Flask on EC2, accessible through the same CloudFront distribution under the /api/* path.
+- **CloudFront**: Configured with multiple origins to serve both the static content from S3 and the API from EC2. A CloudFront function is used to remove the "www." prefix from the domain.
+- **Route 53 DNS**: Manages domain names and subdomains (e.g., static-website.example.com, api.example.com).
 
 ### CloudFront Setup — Multiple Origins
 
