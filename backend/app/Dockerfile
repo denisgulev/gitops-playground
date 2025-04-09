@@ -4,6 +4,7 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV AWS_DEFAULT_REGION=eu-south-1
 
 # Create working directory
 WORKDIR /app
@@ -12,7 +13,7 @@ WORKDIR /app
 COPY app.py .
 
 # Install Flask
-RUN pip install flask
+RUN pip install flask watchtower
 
 # Expose the port Flask will run on
 EXPOSE 8000
