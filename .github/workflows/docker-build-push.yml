@@ -30,6 +30,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: ./backend/app
+        platforms: linux/arm64
         push: true
         tags: |
           ${{ secrets.DOCKER_USERNAME }}/flask-app:${{ steps.tag.outputs.TAG }}
