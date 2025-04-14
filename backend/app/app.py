@@ -27,6 +27,11 @@ def info():
     logger.info("GET /api/info called")
     return jsonify(info="This is a simple info endpoint.")
 
+@app.route("/api/info-new")
+def info():
+    logger.info("GET /api/info-new called")
+    return jsonify(info="This is a NEW info endpoint.")
+
 @app.errorhandler(404)
 def page_not_found(e):
     logger.warning(f"404 - {request.path} not found")
