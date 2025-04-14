@@ -28,7 +28,7 @@ def info():
     return jsonify(info="This is a simple info endpoint.")
 
 @app.route("/api/info-new")
-def info():
+def info_new():
     logger.info("GET /api/info-new called")
     return jsonify(info="This is a NEW info endpoint.")
 
