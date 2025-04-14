@@ -1,0 +1,40 @@
+name: Deploy to EC2
+
+on:
+  workflow_dispatch:  # manual dispatch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Get latest Git tag matching 'v*'
+      id: get_tag
+      run: |
+        git fetch --tags
+        TAG=$(git tag --sort=-creatordate | grep '^v' | head -n 1)
+        echo "TAG=$TAG" >> $GITHUB_OUTPUT
+        echo "Latest TAG: $TAG"
+
+    - name: Get EIP from SSM Parameter Store
+      id: get_eip
+      run: |
+        EIP=$(aws ssm get-parameter --name "/infra/ec2/public_dns" --query "Parameter.Value" --output text)
+        echo "EIP=$EIP" >> $GITHUB_OUTPUT
+        echo "Fetched EC2 Host from SSM: ${EIP}"
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+
+    - name: Deploy to EC2 via SSH
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ steps.get_eip.outputs.EIP }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          docker pull ${{ secrets.DOCKER_USERNAME }}/flask-app:${{ steps.tag.outputs.TAG }}
+          docker stop flask-app || true
+          docker rm flask-app || true
+          docker run -d --name flask-app -p 8000:8000 ${{ secrets.DOCKER_USERNAME }}/flask-app:${{ steps.get_tag.outputs.TAG }}
