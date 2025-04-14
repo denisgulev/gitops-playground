@@ -43,7 +43,18 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
+          echo "Pulling image..."
           docker pull ${{ secrets.DOCKER_USERNAME }}/flask-app:${{ steps.get_tag.outputs.TAG }}
-          docker stop flask-app || true
-          docker rm flask-app || true
+
+          echo "Checking for existing container..."
+          if docker ps -a --format '{{.Names}}' | grep -q '^flask-app$'; then
+            echo "Stopping existing container..."
+            docker stop flask-app
+            echo "Removing existing container..."
+            docker rm flask-app
+          else
+            echo "No existing container found. Proceeding with fresh deployment."
+          fi
+
+          echo "Running new container..."
           docker run -d --name flask-app -p 8000:8000 ${{ secrets.DOCKER_USERNAME }}/flask-app:${{ steps.get_tag.outputs.TAG }}
