@@ -43,18 +43,36 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          echo "Pulling image..."
-          docker pull ${{ secrets.DOCKER_USERNAME }}/flask-app:${{ steps.get_tag.outputs.TAG }}
+          IMAGE=${{ secrets.DOCKER_USERNAME }}/flask-app:${{ steps.get_tag.outputs.TAG }}
+          TEMP_CONTAINER="flask-app-new"
+          CURRENT_CONTAINER="flask-app"
 
-          echo "Checking for existing container..."
-          if docker ps -a --format '{{.Names}}' | grep -q '^flask-app$'; then
-            echo "Stopping existing container..."
-            docker stop flask-app
-            echo "Removing existing container..."
-            docker rm flask-app
+          echo "Pulling image: $IMAGE"
+          docker pull $IMAGE
+
+          echo "Starting temporary container for validation..."
+          docker run -d --name $TEMP_CONTAINER -p 8080:8000 $IMAGE
+
+          echo "Waiting for app to start..."
+          sleep 5
+
+          echo "Performing health check..."
+          if curl -s --max-time 5 http://localhost:8080/api/hello | grep -q 'Hello'; then
+            echo "✅ Health check passed. Rolling forward..."
+
+            if docker ps -a --format '{{.Names}}' | grep -q "^$CURRENT_CONTAINER$"; then
+              docker stop $CURRENT_CONTAINER
+              docker rm $CURRENT_CONTAINER
+            fi
+
+            docker stop $TEMP_CONTAINER
+            docker rename $TEMP_CONTAINER $CURRENT_CONTAINER
+            docker start $CURRENT_CONTAINER
+            echo "✅ Deployed and running: $CURRENT_CONTAINER"
           else
-            echo "No existing container found. Proceeding with fresh deployment."
+            echo "❌ Health check failed! Rolling back."
+            docker stop $TEMP_CONTAINER
+            docker rm $TEMP_CONTAINER
+            echo "🚫 Deployment aborted. Old container remains running."
+            exit 1
           fi
-
-          echo "Running new container..."
-          docker run -d --name flask-app -p 8000:8000 ${{ secrets.DOCKER_USERNAME }}/flask-app:${{ steps.get_tag.outputs.TAG }}
