@@ -1,6 +1,6 @@
-# Application
+# GITOPS-PLAYGROUND
 
-A Terraform-based templates for deploying a frontend app with static web hosting and a backend service.
+A Terraform-based template for deploying a lightweight Flask backend API, managed through the use of GitOps workflows, CI/CD pipelines, and infrastructure automation.
 
 ## Overview
 
@@ -233,8 +233,8 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/your-username/application-boilerplate.git
-   cd application-boilerplate
+   git clone https://github.com/denisgulev/gitops-playground.git
+   cd gitops-playground
    ```
 2.	Customize the variables in the frontend and backend directories to suit your needs.
 3.	Follow the instructions in the linked article to deploy the frontend static website.
