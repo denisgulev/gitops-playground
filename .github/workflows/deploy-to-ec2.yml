@@ -1,7 +1,13 @@
 name: Deploy to EC2
 
+# on:
+#   workflow_dispatch:  # manual dispatch
 on:
-  workflow_dispatch:  # manual dispatch
+  push:
+    branches:
+      - main
+    paths:
+      - app/deployment-version.txt
 
 jobs:
   deploy:
@@ -11,13 +17,19 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Get latest Git tag matching 'v*'
+    # - name: Get latest Git tag matching 'v*'
+    #   id: get_tag
+    #   run: |
+    #     git fetch --tags
+    #     TAG=$(git tag | grep '^v' | sort -V | tail -n 1)
+    #     echo "TAG=$TAG" >> $GITHUB_OUTPUT
+    #     echo "Latest TAG: $TAG"
+
+    - name: Read version tag from file
       id: get_tag
       run: |
-        git fetch --tags
-        TAG=$(git tag | grep '^v' | sort -V | tail -n 1)
+        TAG=$(cat app/deployment-version.txt)
         echo "TAG=$TAG" >> $GITHUB_OUTPUT
-        echo "Latest TAG: $TAG"
 
     - name: Get EIP from SSM Parameter Store
       id: get_eip

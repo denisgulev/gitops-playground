@@ -34,3 +34,28 @@ jobs:
         push: true
         tags: |
           ${{ secrets.DOCKER_USERNAME }}/flask-app:${{ steps.tag.outputs.TAG }}
+    
+    - name: Update deployment version file
+      run: echo "${{ steps.tag.outputs.TAG }}" > app/deployment-version.txt
+
+    - name: Create deployment version PR
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "chore: propose deployment of v${{ steps.tag.outputs.TAG }}"
+        branch: deploy/v${{ steps.tag.outputs.TAG }}
+        title: "Deploy v${{ steps.tag.outputs.TAG }}"
+        body: |
+          🚀 New Docker image [${{ steps.tag.outputs.TAG }}] has been published.
+
+          This PR proposes deploying this version to production.
+
+          Merge to trigger deployment via the Deploy workflow.
+        base: main
+        add-paths: |
+          app/deployment-version.txt
+        labels: |
+          deploy
+          needs-approval
+        reviewers: |
+          denisgulev
