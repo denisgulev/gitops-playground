@@ -41,10 +41,10 @@ jobs:
     - name: Create deployment version PR
       uses: peter-evans/create-pull-request@v5
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: "chore: propose deployment of v${{ steps.tag.outputs.TAG }}"
-        branch: deploy/v${{ steps.tag.outputs.TAG }}
-        title: "Deploy v${{ steps.tag.outputs.TAG }}"
+        token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        commit-message: "chore: propose deployment of ${{ steps.tag.outputs.TAG }}"
+        branch: deploy/${{ steps.tag.outputs.TAG }}
+        title: "Deploy ${{ steps.tag.outputs.TAG }}"
         body: |
           🚀 New Docker image [${{ steps.tag.outputs.TAG }}] has been published.
 
