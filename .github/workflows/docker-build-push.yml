@@ -36,7 +36,7 @@ jobs:
           ${{ secrets.DOCKER_USERNAME }}/flask-app:${{ steps.tag.outputs.TAG }}
     
     - name: Update deployment version file
-      run: echo "${{ steps.tag.outputs.TAG }}" > backend/app/deployment-version.txt
+      run: echo "${{ steps.tag.outputs.TAG }}" >> backend/app/deployment-version.txt
 
     - name: Create deployment version PR
       uses: peter-evans/create-pull-request@v5

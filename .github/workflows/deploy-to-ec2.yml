@@ -7,7 +7,7 @@ on:
     branches:
       - main
     paths:
-      - app/deployment-version.txt
+      - 'backend/app/deployment-version.txt'
 
 jobs:
   deploy:
@@ -28,7 +28,7 @@ jobs:
     - name: Read version tag from file
       id: get_tag
       run: |
-        TAG=$(cat app/deployment-version.txt)
+        TAG=$(tail -n 1 backend/app/deployment-version.txt)
         echo "TAG=$TAG" >> $GITHUB_OUTPUT
 
     - name: Get EIP from SSM Parameter Store
