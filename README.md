@@ -258,7 +258,41 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
 
       2. The backend service runs in Docker. Whenever changes are made in the *backend/app* folder and a tag is pushed, the *docker-build-push.yml* workflow runs, building a Docker image and pushing it to Docker Hub.
 
-  - (TODO) automate the deployment of docker image inside EC2 instance
+  - automate the deployment of docker image inside EC2 instance **DONE**
+    
+    ### 🚀 Automated Deployment Workflow for Flask App
+
+    #### 🧱 Branch Structure
+    -	**backend branch** -> Development branch. New changes are pushed here and tested by a reviewer or i may setup a workflow to test the changes.
+      
+    -	**main branch** -> Production-ready branch. After staging validation and management approval, changes are merged into main, version-tagged, and deployed to production through a gated process.
+
+
+    #### 🛠 CI/CD Pipeline Overview
+
+    ##### 1. ✅ Push to backend
+      - The app is ready to be tested (currently requires a manual pull and local testing)
+      - Once everything is tested, a PR is issued towards main branch
+
+    #### 2. ✅ Merge backend → main and Create a Tag
+      - Merge changes into main
+      - Create a new Git tag (e.g., v1.0.0)
+
+    #### 3. ✅ Tag Push → Build & Push Docker Image + PR for Deployment
+      - GitHub Actions builds the image
+      - Tags and pushes it to Docker Hub (e.g., flask-app:v1.0.0)
+      - Appends the tag to **backend/app/deployment-version.txt**
+      - After the image is pushed to DockerHub, a pull request is created:
+      - From deploy/v1.0.0 → main
+      - Adds labels (deploy, needs-approval)
+      - Requires manual review/approval
+
+    #### 4. ✅ Merge Deployment PR → Deploy to Production
+      - Merging the PR triggers a deploy workflow:
+        - Reads the latest tag from deployment-version.txt
+        - using SSH logs into the production EC2 instance
+        - Pulls and runs the new Docker image
+        - Rolls back if the container fails health checks
 
 - **Add Monitoring, Logging, and Alerts**  
   - Enable detailed **CloudWatch Logs** for backend (Nginx, Gunicorn, Flask).  
