@@ -57,5 +57,5 @@ jobs:
         labels: |
           deploy
           needs-approval
-        reviewers: |
-          denisgulev
+        # reviewers: |
+        #   <reviewer-name>
