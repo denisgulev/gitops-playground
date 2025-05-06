@@ -5,6 +5,9 @@ import os
 
 app = Flask(__name__)
 
+app.logger.handlers = []  # Clear Flask's default handlers
+app.logger.propagate = True
+
 # Setup CloudWatch logging
 logger = logging.getLogger("flask_app")
 logger.setLevel(logging.INFO)
@@ -13,9 +16,22 @@ logger.setLevel(logging.INFO)
 aws_region = os.environ.get("AWS_REGION", "eu-south-1")
 log_group = os.environ.get("CLOUDWATCH_LOG_GROUP", "flask-app-logs")
 
-logger.addHandler(watchtower.CloudWatchLogHandler(log_group=log_group))
+formatter = logging.Formatter(
+    fmt="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+cloudwatch_handler = watchtower.CloudWatchLogHandler(
+    log_group=log_group,
+    region_name=aws_region
+)
+cloudwatch_handler.setFormatter(formatter)
+logger.addHandler(cloudwatch_handler)
 
 STATIC_SITE_URL = "https://static-website.denisgulev.com"  # Replace with your static site URL
+
+@app.before_request
+def log_request_info():
+    logger.info(f"Request: {request.method} {request.path} from {request.remote_addr}")
 
 @app.route("/api/hello")
 def hello():
@@ -41,6 +57,11 @@ def status():
 def page_not_found(e):
     logger.warning(f"404 - {request.path} not found")
     return redirect(f"{STATIC_SITE_URL}/error.html", code=302)
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logger.exception(f"Unhandled exception: {e}")
+    return jsonify(error="An internal error occurred"), 500
 
 if __name__ == "__main__":
     logger.info("Starting Flask app")
