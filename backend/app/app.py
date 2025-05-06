@@ -21,8 +21,7 @@ formatter = logging.Formatter(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 cloudwatch_handler = watchtower.CloudWatchLogHandler(
-    log_group=log_group,
-    region_name=aws_region
+    log_group=log_group
 )
 cloudwatch_handler.setFormatter(formatter)
 logger.addHandler(cloudwatch_handler)
