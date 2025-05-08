@@ -128,7 +128,7 @@ resource "aws_cloudfront_cache_policy" "grafana_cache_policy" {
 
   parameters_in_cache_key_and_forwarded_to_origin {
     headers_config {
-      header_behavior = "allViewer"
+      header_behavior = "whitelist"
     }
     cookies_config {
       cookie_behavior = "all"
