@@ -12,7 +12,6 @@ services:
       - .env
     depends_on:
       - loki
-    restart: unless-stopped
 
   loki:
     image: grafana/loki
