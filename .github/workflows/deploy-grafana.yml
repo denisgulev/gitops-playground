@@ -42,6 +42,21 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # Ensure Docker Compose v2 is installed
+            if ! docker compose version >/dev/null 2>&1; then
+              echo "Docker Compose not found, installing..."
+              DOCKER_COMPOSE_VERSION="v2.27.1"
+              mkdir -p ~/.docker/cli-plugins
+              curl -SL "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+                -o ~/.docker/cli-plugins/docker-compose
+              chmod +x ~/.docker/cli-plugins/docker-compose
+              echo "Docker Compose installed."
+            else
+              echo "Docker Compose already installed."
+            fi
+
+            # Deploy the observability stack
+            echo "Deploying observability stack..."
             cd ~/observability-stack
             docker-compose down
             docker-compose pull
