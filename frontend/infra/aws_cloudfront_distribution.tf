@@ -119,6 +119,7 @@ resource "aws_cloudfront_cache_policy" "api_cache_policy" {
 }
 
 # cache policy for Grafana
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_cache_policy
 resource "aws_cloudfront_cache_policy" "grafana_cache_policy" {
   name = "grafana-cache-policy"
 
