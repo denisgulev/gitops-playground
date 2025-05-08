@@ -2,6 +2,8 @@ name: Deploy Grafana Stack
 
 on:
   push:
+    branches:
+      - main
     paths:
       - '.observability-stack/**'
 
