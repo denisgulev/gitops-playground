@@ -32,7 +32,7 @@ jobs:
           host: ${{ steps.get_eip.outputs.EIP }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "observability-stack/*"
+          source: "observability-stack/**"
           target: "~/observability-stack"
 
       - name: SSH into EC2 and deploy
