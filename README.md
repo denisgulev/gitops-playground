@@ -298,6 +298,41 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
   - Enable detailed **CloudWatch Logs** for backend (Nginx, Gunicorn, Flask).  
   - Set up **CloudWatch Alarms** for critical metrics (CPU, memory, HTTP errors).  
   - Configure notification systems (e.g., **SNS**, email, Slack) for alerts.  
+  #### 📊 Observability Stack (Grafana + Loki + Promtail)
+
+  This repository contains the GitOps-managed configuration to deploy a full observability stack on an AWS EC2 instance using Docker Compose and GitHub Actions.
+
+  ##### 🧰 Stack Components
+  
+  Grafana -> Visualization & alerting platform
+  
+  Loki -> Log aggregation backend
+
+  Promtail -> Log collector/forwarder from EC2 (Nginx, Gunicorn, etc.)
+
+  #### 📁 Log Collection (via Promtail)
+
+  Promtail is configured to collect logs from:
+    •	/var/log/nginx/*.log
+    •	/var/log/gunicorn/*.log
+
+  Modify promtail-config.yaml to add more paths or services.
+
+  #### 🌐 Accessing Grafana
+
+  - Expose Grafana via a subdomain (e.g., grafana.example.com)
+  - Secure with HTTPS and auth
+  - Configure GF_SERVER_ROOT_URL properly
+
+  #### 🔔 Alerting
+
+  Grafana supports:
+  - Log-based alerting
+  - Notification channels (Email, Slack, Webhook, etc.)
+
+  Alerts can be version-controlled using provisioning or exported JSON.
+
+
 
 - **Security Hardening**  
   - Apply least privilege principles to IAM roles and security groups.  
