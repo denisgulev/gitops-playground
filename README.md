@@ -313,8 +313,8 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
   #### 📁 Log Collection (via Promtail)
 
   Promtail is configured to collect logs from:
-    •	/var/log/nginx/*.log
-    •	/var/log/gunicorn/*.log
+  - /var/log/nginx/*.log
+  - /var/log/gunicorn/*.log
 
   Modify promtail-config.yaml to add more paths or services.
 
