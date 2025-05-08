@@ -124,18 +124,25 @@ resource "aws_cloudfront_cache_policy" "grafana_cache_policy" {
   name = "grafana-cache-policy"
 
   default_ttl = 0
-  max_ttl     = 0
+  max_ttl     = 10
   min_ttl     = 0
 
   parameters_in_cache_key_and_forwarded_to_origin {
     headers_config {
-      header_behavior = "none"
+      header_behavior = "whitelist"
+      headers {
+        items = [
+          "Access-Control-Request-Headers",
+          "Access-Control-Request-Method",
+          "Origin"
+        ]
+      }
     }
     cookies_config {
-      cookie_behavior = "none"
+      cookie_behavior = "all"
     }
     query_strings_config {
-      query_string_behavior = "none"
+      query_string_behavior = "all"
     }
   }
 }
