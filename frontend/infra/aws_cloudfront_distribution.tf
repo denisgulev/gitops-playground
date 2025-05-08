@@ -118,6 +118,8 @@ resource "aws_cloudfront_cache_policy" "api_cache_policy" {
   }
 }
 
+# cache policy for Grafana
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_cache_policy
 resource "aws_cloudfront_cache_policy" "grafana_cache_policy" {
   name = "grafana-cache-policy"
 
@@ -127,13 +129,13 @@ resource "aws_cloudfront_cache_policy" "grafana_cache_policy" {
 
   parameters_in_cache_key_and_forwarded_to_origin {
     headers_config {
-      header_behavior = "allViewer"
+      header_behavior = "none"
     }
     cookies_config {
-      cookie_behavior = "all"
+      cookie_behavior = "none"
     }
     query_strings_config {
-      query_string_behavior = "all"
+      query_string_behavior = "none"
     }
   }
 }

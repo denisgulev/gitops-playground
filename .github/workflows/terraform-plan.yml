@@ -35,5 +35,6 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
+        # this requires TF_API_TOKEN to be set in the repo secrets = Team Token (generated in Terraform Workspaces -> Settings -> API Tokens)
       - name: Terraform Plan
-        run: terraform plan
+        run: terraform plan 
