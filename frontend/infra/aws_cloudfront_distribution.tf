@@ -136,9 +136,9 @@ resource "aws_cloudfront_cache_policy" "grafana_cache_policy" {
           "Origin",
           "Referer",
           "Authorization",
-          "Cookie",
-          "X-Forwarded-For",
-          "X-Forwarded-Proto"
+          "Access-Control-Request-Method",
+          "Access-Control-Request-Headers",
+          "CloudFront-Forwarded-Proto"
         ]
       }
     }
