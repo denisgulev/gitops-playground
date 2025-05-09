@@ -123,8 +123,8 @@ resource "aws_cloudfront_cache_policy" "api_cache_policy" {
 resource "aws_cloudfront_cache_policy" "grafana_cache_policy" {
   name = "grafana-cache-policy"
 
-  default_ttl = 0
-  max_ttl     = 10
+  default_ttl = 1
+  max_ttl     = 60
   min_ttl     = 0
 
   parameters_in_cache_key_and_forwarded_to_origin {
@@ -132,9 +132,13 @@ resource "aws_cloudfront_cache_policy" "grafana_cache_policy" {
       header_behavior = "whitelist"
       headers {
         items = [
-          "Access-Control-Request-Headers",
-          "Access-Control-Request-Method",
-          "Origin"
+          "Host",
+          "Origin",
+          "Referer",
+          "Authorization",
+          "Cookie",
+          "X-Forwarded-For",
+          "X-Forwarded-Proto"
         ]
       }
     }
