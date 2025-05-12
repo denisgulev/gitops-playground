@@ -16,6 +16,8 @@ logger.setLevel(logging.INFO)
 aws_region = os.environ.get("AWS_REGION", "eu-south-1")
 log_group = os.environ.get("CLOUDWATCH_LOG_GROUP", "flask-app-logs")
 
+logging.basicConfig(filename='/var/log/flask/app.log', level=logging.INFO)
+
 formatter = logging.Formatter(
     fmt="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
