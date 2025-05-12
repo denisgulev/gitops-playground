@@ -60,11 +60,6 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     cached_methods  = ["GET", "HEAD"]
 
     cache_policy_id = aws_cloudfront_cache_policy.grafana_cache_policy.id
-
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.grafana_redirect.arn
-    }
   }
 
   # Default Cache Behavior for Static Content (S3)
