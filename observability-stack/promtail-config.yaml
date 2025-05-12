@@ -14,3 +14,12 @@ scrape_configs:
         labels:
           job: gunicorn
           __path__: /var/log/gunicorn/*.log
+
+  - job_name: flask
+    static_configs:
+      - targets: 
+        - localhost
+        labels:
+          job: flask
+          __path__: /var/log/flask/*.log
+          

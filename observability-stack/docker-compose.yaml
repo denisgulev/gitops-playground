@@ -12,6 +12,10 @@ services:
       - .env
     depends_on:
       - loki
+    environment:
+      - GF_SERVER_ROOT_URL=http://localhost:3000/
+    networks:
+      - observability
     restart: unless-stopped
 
   loki:
@@ -20,6 +24,8 @@ services:
     ports:
       - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - observability
     restart: unless-stopped
 
   promtail:
@@ -34,3 +40,7 @@ services:
 
 volumes:
   grafana-data:
+
+
+networks:
+  observability:
