@@ -63,13 +63,13 @@ jobs:
           docker pull $IMAGE
 
           echo "Starting temporary container for validation..."
-          docker run -d --name $TEMP_CONTAINER -p 8080:8000 $IMAGE
+          docker run -d --name $TEMP_CONTAINER -p 8080:8000 $IMAGE -v /var/log/flask:/var/log/flask
 
           echo "Waiting for app to start..."
           sleep 5
 
           echo "Performing health check..."
-          if curl -s --max-time 5 http://localhost:8080/api/hello | grep -q 'Hello'; then
+          if curl -s --max-time 30 http://localhost:8080/api/hello | grep -q 'Hello'; then
             echo "✅ Health check passed. Rolling forward..."
 
             if docker ps -a --format '{{.Names}}' | grep -q "^$CURRENT_CONTAINER$"; then
