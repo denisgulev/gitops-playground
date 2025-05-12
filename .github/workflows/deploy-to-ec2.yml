@@ -63,7 +63,7 @@ jobs:
           docker pull $IMAGE
 
           echo "Starting temporary container for validation..."
-          docker run -d --name $TEMP_CONTAINER -p 8080:8000 $IMAGE -v /var/log/flask:/var/log/flask
+          docker run -d --name $TEMP_CONTAINER -p 8080:8000 -v /var/log/flask:/var/log/flask $IMAGE
 
           echo "Waiting for app to start..."
           sleep 5
