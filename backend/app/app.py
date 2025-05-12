@@ -3,30 +3,44 @@ import logging
 import watchtower
 import os
 
-app = Flask(__name__)
-
-app.logger.handlers = []  # Clear Flask's default handlers
-app.logger.propagate = True
-
-# Setup CloudWatch logging
-logger = logging.getLogger("flask_app")
-logger.setLevel(logging.INFO)
-
 # AWS region and log group from environment variables or defaults
 aws_region = os.environ.get("AWS_REGION", "eu-south-1")
 log_group = os.environ.get("CLOUDWATCH_LOG_GROUP", "flask-app-logs")
 
-logging.basicConfig(filename='/var/log/flask/app.log', level=logging.INFO)
+# Create log directory if it doesn't exist
+log_dir = "/var/log/flask"
+os.makedirs(log_dir, exist_ok=True)
 
+# Create logger
+logger = logging.getLogger("flask_app")
+logger.setLevel(logging.INFO)
 formatter = logging.Formatter(
     fmt="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
+
+# File Handler for Promtail
+file_handler = logging.FileHandler(os.path.join(log_dir, "app.log"))
+file_handler.setFormatter(formatter)
+
+# CloudWatch Handler
 cloudwatch_handler = watchtower.CloudWatchLogHandler(
     log_group=log_group
 )
 cloudwatch_handler.setFormatter(formatter)
+
+# Attach all handlers
+logger.addHandler(file_handler)
 logger.addHandler(cloudwatch_handler)
+
+# Use the logger
+logger.info("Logging to file + CloudWatch is active.")
+
+# App
+app = Flask(__name__)
+
+app.logger.handlers = []  # Clear Flask's default handlers
+app.logger.propagate = True
 
 STATIC_SITE_URL = "https://static-website.denisgulev.com"  # Replace with your static site URL
 
