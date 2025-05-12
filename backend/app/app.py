@@ -39,9 +39,6 @@ logger.info("Logging to file + CloudWatch is active.")
 # App
 app = Flask(__name__)
 
-app.logger.handlers = []  # Clear Flask's default handlers
-app.logger.propagate = True
-
 STATIC_SITE_URL = "https://static-website.denisgulev.com"  # Replace with your static site URL
 
 @app.before_request
