@@ -50,23 +50,6 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     cached_methods  = ["GET", "HEAD"]
   }
 
-  # Cache Behavior for Grafana (/grafana/*)
-  ordered_cache_behavior {
-    path_pattern           = "/grafana/*"
-    target_origin_id       = "EC2-origin"
-    viewer_protocol_policy = "redirect-to-https"
-
-    allowed_methods = ["GET", "HEAD", "OPTIONS"]
-    cached_methods  = ["GET", "HEAD"]
-
-    cache_policy_id = aws_cloudfront_cache_policy.grafana_cache_policy.id
-
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.grafana_redirect.arn
-    }
-  }
-
   # Default Cache Behavior for Static Content (S3)
   default_cache_behavior {
     cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
@@ -123,54 +106,12 @@ resource "aws_cloudfront_cache_policy" "api_cache_policy" {
   }
 }
 
-# cache policy for Grafana
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_cache_policy
-resource "aws_cloudfront_cache_policy" "grafana_cache_policy" {
-  name = "grafana-cache-policy"
-
-  default_ttl = 1
-  max_ttl     = 60
-  min_ttl     = 0
-
-  parameters_in_cache_key_and_forwarded_to_origin {
-    headers_config {
-      header_behavior = "whitelist"
-      headers {
-        items = [
-          "Host",
-          "Origin",
-          "Referer",
-          "Authorization",
-          "Access-Control-Request-Method",
-          "Access-Control-Request-Headers",
-          "CloudFront-Forwarded-Proto"
-        ]
-      }
-    }
-    cookies_config {
-      cookie_behavior = "all"
-    }
-    query_strings_config {
-      query_string_behavior = "all"
-    }
-  }
-}
-
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_function
 resource "aws_cloudfront_function" "www_redirect" {
   name    = "${local.prefix}-www-redirect"
   comment = "Redirects www to root domain"
   runtime = "cloudfront-js-1.0"
   code    = file("./cloudfront_function.js")
-  publish = true
-}
-
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_function
-resource "aws_cloudfront_function" "grafana_redirect" {
-  name    = "${local.prefix}-grafana-slash-redirect"
-  comment = "Redirect /grafana to /grafana/"
-  runtime = "cloudfront-js-1.0"
-  code    = file("./cloudfront_function_grafana.js")
   publish = true
 }
 

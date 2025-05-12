@@ -320,9 +320,7 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
 
   #### 🌐 Accessing Grafana
 
-  - Expose Grafana via a subdomain (e.g., grafana.example.com)
-  - Secure with HTTPS and auth
-  - Configure GF_SERVER_ROOT_URL properly
+  - Grafana will be accessible only internally to the team, there will not be a subdomain or route on the main website.
 
   #### 🔔 Alerting
 
