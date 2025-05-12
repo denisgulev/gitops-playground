@@ -37,6 +37,8 @@ services:
     command: -config.file=/etc/promtail/promtail.yaml
     depends_on:
       - loki
+    networks:
+      - observability
 
 volumes:
   grafana-data:
