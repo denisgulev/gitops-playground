@@ -71,3 +71,7 @@ systemctl enable --now nginx
 
 # Enable Docker
 systemctl enable --now docker
+
+# Create log directory for Flask
+sudo mkdir -p /var/log/flask
+sudo chown ec2-user:ec2-user /var/log/flask

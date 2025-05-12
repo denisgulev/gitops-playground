@@ -7,9 +7,7 @@ import os
 aws_region = os.environ.get("AWS_REGION", "eu-south-1")
 log_group = os.environ.get("CLOUDWATCH_LOG_GROUP", "flask-app-logs")
 
-# Create log directory if it doesn't exist
 log_dir = "/var/log/flask"
-os.makedirs(log_dir, exist_ok=True)
 
 # Create logger
 logger = logging.getLogger("flask_app")
