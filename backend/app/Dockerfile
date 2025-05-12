@@ -15,6 +15,9 @@ COPY app.py .
 # Install Flask
 RUN pip install flask watchtower
 
+# Create log directory for Flask
+RUN mkdir -p /var/log/flask
+
 # Expose the port Flask will run on
 EXPOSE 8000
 
