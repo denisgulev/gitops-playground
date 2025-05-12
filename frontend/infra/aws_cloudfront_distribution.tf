@@ -58,8 +58,6 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 
     allowed_methods = ["GET", "HEAD", "OPTIONS"]
     cached_methods  = ["GET", "HEAD"]
-
-    cache_policy_id = aws_cloudfront_cache_policy.grafana_cache_policy.id
   }
 
   # Default Cache Behavior for Static Content (S3)
