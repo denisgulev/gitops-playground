@@ -308,22 +308,19 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
   
   Loki -> Log aggregation backend
 
-  Promtail -> Log collector/forwarder from EC2 (Nginx, Gunicorn, etc.)
+  Promtail -> Log collector/forwarder from EC2 instance
 
   #### 📁 Log Collection (via Promtail)
 
-  Promtail is configured to collect logs from:
-  - /var/log/nginx/*.log
-  - /var/log/gunicorn/*.log
-  - /var/log/flask/*.log
+  Promtail is currently configured to collect logs from:
+  - **/var/log/flask/*.log** (Flask application logs)
 
-  Modify promtail-config.yaml to add more paths or services.
+  To add support for additional services (e.g., Nginx, Gunicorn), update the `promtail-config.yaml` file by adding new `scrape_configs` with appropriate paths.
 
   #### 🌐 Accessing Grafana
 
-  - Expose Grafana via a subdomain (e.g., grafana.example.com)
-  - Secure with HTTPS and auth
-  - Configure GF_SERVER_ROOT_URL properly
+  Grafana is accessible **only internally** via the EC2 instance’s IP.  
+  It is not exposed through a public domain or CloudFront.
 
   #### 🔔 Alerting
 
