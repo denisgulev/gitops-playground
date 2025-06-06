@@ -74,6 +74,11 @@ def status():
     logger.info("GET /api/status called")
     return jsonify(status="App is running")
 
+@app.route("/api/status-new")
+def status():
+    logger.info("GET /api/status-new called")
+    return jsonify(status="App is running")
+
 @app.errorhandler(404)
 def page_not_found(e):
     logger.warning(f"404 - {request.path} not found")
