@@ -55,6 +55,7 @@ services:
     command: [ "--config.file=/etc/tempo.yaml" ]
     networks:
       - observability
+    restart: unless-stopped
 
   mimir:
     image: grafana/mimir
@@ -66,6 +67,7 @@ services:
       - ./mimir-config.yaml:/etc/mimir.yaml
     networks:
       - observability
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus
