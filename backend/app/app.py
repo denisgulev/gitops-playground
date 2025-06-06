@@ -3,6 +3,11 @@ import logging
 import watchtower
 import os
 
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
 # AWS region and log group from environment variables or defaults
 aws_region = os.environ.get("AWS_REGION", "eu-south-1")
 log_group = os.environ.get("CLOUDWATCH_LOG_GROUP", "flask-app-logs")
@@ -36,6 +41,12 @@ logger.info("Logging to file + CloudWatch is active.")
 
 # App
 app = Flask(__name__)
+FlaskInstrumentor().instrument_app(app)
+
+trace_provider = TracerProvider()
+trace_provider.add_span_processor(
+    BatchSpanProcessor(OTLPSpanExporter(endpoint="http://tempo:4318/v1/traces"))
+)
 
 STATIC_SITE_URL = "https://static-website.denisgulev.com"  # Replace with your static site URL
 
