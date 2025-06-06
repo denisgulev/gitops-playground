@@ -10,7 +10,10 @@ echo "AWS_DEFAULT_REGION=${aws_region}" >> /etc/environment
 source /etc/environment
 
 # Install Gunicorn
-pip3 install gunicorn
+pip3 install gunicorn opentelemetry-api \
+            opentelemetry-sdk \
+            opentelemetry-instrumentation-flask \
+            opentelemetry-exporter-otlp
 
 # Create Flask systemd service
 cat > "/etc/systemd/system/flaskapp.service" <<EOF
