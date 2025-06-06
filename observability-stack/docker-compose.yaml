@@ -12,6 +12,9 @@ services:
       - .env
     depends_on:
       - loki
+      - tempo
+      - mimir
+      - prometheus
     environment:
       - GF_SERVER_ROOT_URL=http://localhost:3000/
     networks:
@@ -39,6 +42,41 @@ services:
       - loki
     networks:
       - observability
+
+  tempo:
+    image: grafana/tempo
+    container_name: tempo
+    ports:
+      - "3200:3200" # HTTP API
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    volumes:
+      - ./tempo-config.yaml:/etc/tempo.yaml
+    command: [ "--config.file=/etc/tempo.yaml" ]
+    networks:
+      - observability
+
+  mimir:
+    image: grafana/mimir
+    container_name: mimir
+    ports:
+      - "9009:9009"
+    command: [ "-config.file=/etc/mimir.yaml" ]
+    volumes:
+      - ./mimir-config.yaml:/etc/mimir.yaml
+    networks:
+      - observability
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - observability
+    restart: unless-stopped
 
 volumes:
   grafana-data:
