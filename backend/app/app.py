@@ -75,7 +75,7 @@ def status():
     return jsonify(status="App is running")
 
 @app.route("/api/status-new")
-def status():
+def status_new():
     logger.info("GET /api/status-new called")
     return jsonify(status="App is running")
 
