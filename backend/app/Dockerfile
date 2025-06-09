@@ -13,7 +13,7 @@ WORKDIR /app
 COPY app.py .
 
 # Install Flask
-RUN pip install flask watchtower \ 
+RUN pip install flask watchtower \
     opentelemetry-api \
     opentelemetry-sdk \
     opentelemetry-instrumentation-flask \
