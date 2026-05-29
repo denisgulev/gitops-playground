@@ -38,7 +38,7 @@ resource "aws_subnet" "private_subnet_1" {
   vpc_id                  = aws_vpc.main_vpc.id
   cidr_block              = "10.0.101.0/24"
   availability_zone       = "${var.aws_region}a"
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = false
 
   tags = {
     Name = "PrivateSubnet1"
@@ -49,7 +49,7 @@ resource "aws_subnet" "private_subnet_2" {
   vpc_id                  = aws_vpc.main_vpc.id
   cidr_block              = "10.0.102.0/24"
   availability_zone       = "${var.aws_region}b"
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = false
 
   tags = {
     Name = "PrivateSubnet2"
@@ -96,15 +96,14 @@ resource "aws_vpc_security_group_ingress_rule" "sg_ingress_https" {
   description    = "FROM THE INTERNET - HTTPS"
 }
 
-# to be enabled when needed; best use it to allow only a specific IP or a range of IPs
 resource "aws_vpc_security_group_ingress_rule" "sg_ingress_ssh" {
   security_group_id = aws_security_group.flask_sg_http.id
 
   from_port   = 22
   to_port     = 22
   ip_protocol = "tcp"
-  cidr_ipv4   = "0.0.0.0/0"
-  description = "SSH Access"
+  cidr_ipv4   = var.ssh_allowed_cidr
+  description = "SSH Access - restricted to trusted CIDR"
 }
 
 resource "aws_vpc_security_group_egress_rule" "sg_egress_http" {
