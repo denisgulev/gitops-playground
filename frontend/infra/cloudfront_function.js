@@ -1,10 +1,10 @@
 function handler(event) {
-    var request = event.request;
-    var hostHeader = request.headers.host.value;
+    const request = event.request;
+    const hostHeader = request.headers.host.value;
 
     if (hostHeader.startsWith('www.')) {
-        // Strip 'www.' and redirect to non-www version
-        var rootDomain = hostHeader.substring(4); // Remove 'www.'
+        // Strip 'www.' and redirect to a non-www version
+        const rootDomain = hostHeader.substring(4); // Remove 'www.'
 
         return {
             statusCode: 301,
