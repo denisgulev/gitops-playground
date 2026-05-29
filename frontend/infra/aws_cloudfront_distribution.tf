@@ -44,7 +44,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     cache_policy_id        = aws_cloudfront_cache_policy.api_cache_policy.id
     path_pattern           = "/api/*"
     target_origin_id       = "EC2-origin"
-    viewer_protocol_policy = "allow-all"
+    viewer_protocol_policy = "redirect-to-https"
 
     allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods  = ["GET", "HEAD"]

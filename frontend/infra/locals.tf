@@ -16,6 +16,13 @@ locals {
     ".gif" : "image/gif",
     ".svg" : "image/svg+xml",
     ".ico" : "image/x-icon",
-    ".eot" : "application/vnd.ms-fontobject"
+    ".eot" : "application/vnd.ms-fontobject",
+    ".woff" : "font/woff",
+    ".woff2" : "font/woff2",
+    ".ttf" : "font/ttf",
+    ".otf" : "font/otf",
+    ".webp" : "image/webp",
+    ".txt" : "text/plain",
+    ".xml" : "application/xml"
   }
 }
