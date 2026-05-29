@@ -26,7 +26,7 @@ User=ec2-user
 Group=ec2-user
 WorkingDirectory=/home/ec2-user
 EnvironmentFile=/etc/environment
-ExecStart=/usr/local/bin/gunicorn --workers 3 --bind 0.0.0.0:5000 app:app
+ExecStart=/usr/local/bin/gunicorn --workers 3 --bind 0.0.0.0:8000 app:app
 
 [Install]
 WantedBy=multi-user.target
@@ -35,6 +35,7 @@ EOF
 # Enable Gunicorn service
 systemctl daemon-reload
 systemctl enable --now flaskapp
+usermod -aG docker ec2-user
 
 # Configure Nginx reverse proxy
 cat > "/etc/nginx/conf.d/flaskapp.conf" <<EOF
