@@ -4,13 +4,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Static Website</title>
+    <title>GitOps Playground</title>
     <style>
         :root {
             --primary-color: #4CAF50;
+            --primary-hover: #388e3c;
             --text-color: #333;
-            --background-color: #f9f9f9;
+            --background-color: #f4f6f8;
+            --card-bg: #fff;
             --error-color: #e74c3c;
+            --success-color: #2ecc71;
+            --muted-color: #888;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
@@ -21,84 +29,173 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-start;
             min-height: 100vh;
-            padding: 40px 20px;
-            box-sizing: border-box;
+            padding: 48px 20px;
         }
 
-        h1 {
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        header h1 {
             color: var(--primary-color);
-            margin-bottom: 10px;
+            margin: 0 0 8px;
+            font-size: 2rem;
         }
 
-        p {
-            font-size: 1.1rem;
-            margin-bottom: 30px;
+        header p {
+            color: var(--muted-color);
+            font-size: 0.95rem;
+            margin: 0;
         }
 
-        div {
-            background-color: #fff;
-            padding: 30px 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            max-width: 400px;
+        main {
             width: 100%;
+            max-width: 480px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            padding: 28px 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            margin: 0 0 16px;
+            font-size: 1.1rem;
+            color: var(--text-color);
+        }
+
+        .button-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
         }
 
         button {
             background-color: var(--primary-color);
             color: white;
             border: none;
-            padding: 12px 20px;
-            font-size: 1rem;
-            border-radius: 5px;
+            padding: 10px 18px;
+            font-size: 0.9rem;
+            border-radius: 6px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
+            transition: background-color 0.2s ease, opacity 0.2s ease;
         }
 
-        button:hover {
-            background-color: #388e3c;
+        button:hover:not(:disabled) {
+            background-color: var(--primary-hover);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
 
         #response {
             margin-top: 20px;
-            font-size: 1rem;
-            word-wrap: break-word;
+            font-size: 0.9rem;
+            word-break: break-word;
+        }
+
+        .response-box {
+            background-color: #f8f8f8;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 12px 14px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
         }
 
         .error {
             color: var(--error-color);
         }
+
+        .label {
+            font-size: 0.75rem;
+            color: var(--muted-color);
+            margin-bottom: 6px;
+        }
     </style>
 </head>
 
 <body>
-    <h1>Welcome to My Static Website - 2025</h1>
-    <p>This website is hosted on an Amazon S3 bucket.</p>
-    <div>
-        <h1>Test Flask Backend</h1>
-        <button onclick="callApi()">Call API</button>
-        <p id="response"></p>
-    </div>
+    <header>
+        <h1>GitOps Playground</h1>
+        <p>Static site on S3 + CloudFront &mdash; Flask API on EC2</p>
+    </header>
+
+    <main>
+        <section class="card">
+            <h2>Backend API</h2>
+            <div class="button-row">
+                <button onclick="callApi('/api/hello')" id="btn-hello">Hello</button>
+                <button onclick="callApi('/api/info')" id="btn-info">Info</button>
+                <button onclick="callApi('/api/status')" id="btn-status">Status</button>
+            </div>
+            <div id="response"></div>
+        </section>
+    </main>
 
     <script>
-        async function callApi() {
-            const responseElement = document.getElementById('response');
-            const url = 'https://api.denisgulev.com/api/hello';
-            try {
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                const data = await response.text();
-                responseElement.textContent = data;
-            } catch (error) {
-                console.warn('API call failed: ', url, error);
-                responseElement.innerHTML = "<span class='error'>Both APIs are unreachable. Please try again later.</span>";
+        var API_BASE = 'https://api.denisgulev.com';
+
+        function setLoading(loading) {
+            var buttons = document.querySelectorAll('button');
+            for (var i = 0; i < buttons.length; i++) {
+                buttons[i].disabled = loading;
             }
+        }
+
+        async function callApi(path) {
+            var responseEl = document.getElementById('response');
+            responseEl.innerHTML = '<p class="label">Loading...</p>';
+            setLoading(true);
+
+            try {
+                var response = await fetch(API_BASE + path, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                var text = await response.text();
+                var display;
+
+                try {
+                    display = JSON.stringify(JSON.parse(text), null, 2);
+                } catch (_) {
+                    display = text;
+                }
+
+                if (!response.ok) {
+                    responseEl.innerHTML =
+                        '<p class="label">Error ' + response.status + ' from ' + path + '</p>' +
+                        '<div class="response-box error">' + escapeHtml(display) + '</div>';
+                } else {
+                    responseEl.innerHTML =
+                        '<p class="label">Response from ' + path + '</p>' +
+                        '<div class="response-box">' + escapeHtml(display) + '</div>';
+                }
+            } catch (err) {
+                console.warn('API call failed:', path, err);
+                responseEl.innerHTML =
+                    '<p class="label">Network error</p>' +
+                    '<div class="response-box error">Could not reach ' + escapeHtml(API_BASE + path) + '</div>';
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function escapeHtml(str) {
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
         }
     </script>
 </body>
