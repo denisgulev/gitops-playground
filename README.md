@@ -1,8 +1,267 @@
-# GITOPS-PLAYGROUND
+# GitOps Playground
 
-A Terraform-based template for deploying a lightweight Flask backend API, managed through the use of GitOps workflows, CI/CD pipelines, and infrastructure automation.
+A production-ready boilerplate for deploying a Flask backend API and a static frontend on AWS, fully automated with Terraform and GitHub Actions.
+
+---
 
 ## Overview
+
+| Layer | Technology |
+|---|---|
+| Frontend | Static HTML/JS hosted on S3, served via CloudFront |
+| Backend | Flask + Gunicorn in Docker on EC2, behind Nginx |
+| Infrastructure | Terraform (Terraform Cloud, two workspaces) |
+| DNS | Route 53 (ACM-issued TLS cert) |
+| CI/CD | GitHub Actions |
+| Observability | Grafana · Loki · Promtail · Tempo · Mimir |
+
+---
+
+## Architecture
+
+```
+                         ┌─────────────────────────────────────────┐
+                         │           CloudFront Distribution        │
+                         │                                         │
+                         │  default /*  ──────────►  S3 Origin     │
+                         │  /api/*      ──────────►  EC2 Origin    │
+                         └──────────┬────────────────────┬─────────┘
+                                    │                    │
+                           static-website.          api.domain.com
+                               domain.com
+                                    │                    │
+                              ┌─────▼─────┐       ┌─────▼──────┐
+                              │ S3 Bucket │       │ EC2 (Nginx) │
+                              │  (private)│       │  → Gunicorn │
+                              └───────────┘       │  → Flask    │
+                                                  └────────────┘
+```
+
+Both domains (`static-website.domain.com` and `api.domain.com`) point to the **same CloudFront distribution**. CloudFront uses path-based routing to forward `/api/*` requests to the EC2 origin and everything else to S3.
+
+---
+
+## Repository Structure
+
+```
+.
+├── backend/
+│   ├── app/                    # Flask application (Docker image)
+│   │   ├── app.py
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── deployment-version.txt
+│   └── infra/                  # Terraform — EC2, VPC, IAM, EIP, SSM
+├── frontend/
+│   ├── static/dist/            # Static HTML/JS deployed to S3
+│   └── infra/                  # Terraform — S3, CloudFront, ACM, Route 53
+├── observability-stack/        # Docker Compose — Grafana, Loki, Promtail, Tempo, Mimir
+├── bin/                        # Helper scripts (S3 bucket creation)
+└── .github/workflows/          # GitHub Actions CI/CD pipelines
+```
+
+---
+
+## Prerequisites
+
+- AWS account with sufficient IAM permissions
+- Terraform Cloud account (organization + two workspaces: `Backend`, `Frontend`)
+- Docker Hub account
+- A registered domain with a Route 53 hosted zone
+- GitHub repository secrets configured (see [CI/CD](#cicd) section)
+
+---
+
+## Backend
+
+### Flask Application (`backend/app/`)
+
+The API is a Python Flask app served by Gunicorn. It runs as a non-root Docker container on EC2.
+
+**Endpoints:**
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/hello` | Returns a greeting |
+| GET | `/api/info` | Returns service info |
+| GET | `/api/status` | Health check endpoint |
+
+**Logging:**
+- Structured logs are written to `/var/log/flask/app.log` (picked up by Promtail) and to CloudWatch Logs via `watchtower`. Both handlers fail gracefully — the app continues running if either destination is unavailable.
+
+**Tracing:**
+- OpenTelemetry traces are exported to a Tempo endpoint. The endpoint defaults to `http://tempo:4318/v1/traces` and can be overridden via the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable.
+
+**Environment variables:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `AWS_DEFAULT_REGION` | `eu-south-1` | AWS region for CloudWatch |
+| `CLOUDWATCH_LOG_GROUP` | `flask-app-logs` | CloudWatch log group name |
+| `STATIC_SITE_URL` | `https://static-website.example.com` | Used for 404 redirects |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://tempo:4318/v1/traces` | Tempo trace exporter endpoint |
+
+### Docker (`backend/app/Dockerfile`)
+
+- Base image: `python:3.11-slim`
+- Non-root user (`appuser:appgroup`) for runtime security
+- Dependencies installed from pinned `requirements.txt`
+- Health check: `GET /api/status`
+- Entrypoint: `gunicorn --workers 3 --bind 0.0.0.0:8000 app:app`
+
+### EC2 Infrastructure (`backend/infra/`)
+
+Managed via Terraform (workspace: `Backend`). See [backend/infra/README.md](backend/infra/README.md) for full resource documentation.
+
+**Key resources:**
+- EC2 instance (Amazon Linux 2023, ARM) bootstrapped via `user_data.sh`
+- Elastic IP — stable public address across instance replacements
+- Nginx — reverse proxy on port 80 forwarding to Gunicorn on port 8000; handles CORS preflight
+- Security groups — HTTP/HTTPS ingress restricted to the CloudFront managed prefix list; SSH restricted via `ssh_allowed_cidr`
+- SSM Parameter — EIP DNS stored at `/infra/ec2/public_dns` for cross-workspace consumption
+
+**Terraform variables:**
+
+| Variable | Description |
+|---|---|
+| `aws_region` | Deployment region |
+| `instance_type` | EC2 instance type |
+| `domain_name` | Base domain (e.g. `example.com`) |
+| `ssh_allowed_cidr` | CIDR block allowed to SSH (restrict in production) |
+
+### Deployment Workflow
+
+1. Develop on a feature branch
+2. Open a PR targeting `main` → **Terraform Plan** runs automatically
+3. Add label `ready-for-tf-apply` → **Terraform Apply** runs (job-level guard)
+4. Merge PR
+
+For application deployments (Docker image updates):
+
+1. Merge to `main` and push a version tag (e.g. `v1.2.0`)
+2. `docker-build-push.yml` builds and pushes the image to Docker Hub, then opens a deployment PR
+3. Review and merge the deployment PR → `deploy-to-ec2.yml` SSHes into EC2, pulls the image, runs a canary health check, and promotes or rolls back
+
+---
+
+## Frontend
+
+### Static Site (`frontend/static/dist/`)
+
+Plain HTML/JS. The JavaScript calls `https://api.domain.com/api/hello` to demonstrate frontend–backend connectivity.
+
+### Infrastructure (`frontend/infra/`)
+
+Managed via Terraform (workspace: `Frontend`). See [frontend/infra/README.md](frontend/infra/README.md) for full resource documentation.
+
+**Key resources:**
+
+| Resource | Purpose |
+|---|---|
+| S3 bucket (private) | Stores static files |
+| CloudFront distribution | CDN with two origins (S3 + EC2), TLS enforced |
+| ACM certificate | TLS cert for the domain, validated via DNS |
+| Route 53 records | A records for `static-website.domain.com` and `api.domain.com` → CloudFront |
+| CloudFront Function | Strips `www.` prefix from requests |
+| SSM data source | Reads EC2 EIP DNS from `/infra/ec2/public_dns` (written by backend Terraform) |
+
+**CloudFront routing:**
+
+| Path pattern | Origin | Cache policy |
+|---|---|---|
+| `/api/*` | EC2 (Nginx/Gunicorn) | Custom — 0 TTL, CORS headers forwarded |
+| `/*` (default) | S3 bucket | Managed CachingOptimized |
+
+### Deployment Workflow
+
+**Infrastructure:**
+1. Open a PR with changes to `frontend/infra/` → **Terraform Plan** runs
+2. Add `ready-for-tf-apply` label → **Terraform Apply** runs
+3. Merge PR
+
+**Static files:**
+- Push to `main` with changes in `frontend/static/` → `static-deploy.yml` syncs `dist/` to S3 and invalidates CloudFront cache
+
+---
+
+## Observability Stack
+
+Deployed to the same EC2 instance via Docker Compose. Managed by `deploy-grafana.yml` on push to `main` when `observability-stack/**` changes.
+
+| Service | Role |
+|---|---|
+| Grafana | Dashboards and alerting |
+| Loki | Log storage backend |
+| Promtail | Scrapes `/var/log/flask/*.log` and ships to Loki |
+| Tempo | Distributed tracing backend (receives OTLP spans from Flask) |
+| Mimir | Long-term metrics storage |
+| Prometheus | Metrics scraping |
+
+Grafana is accessible only via the EC2 instance's IP — it is not exposed publicly.
+
+---
+
+## CI/CD
+
+| Workflow | Trigger | Action |
+|---|---|---|
+| `terraform-plan.yml` | PR to `main` touching `frontend/infra/**` | Terraform fmt, validate, plan |
+| `terraform-apply.yml` | PR labeled `ready-for-tf-apply` + targets `main` | Terraform apply |
+| `terraform-plan-backend.yml` | PR to `main` touching `backend/infra/**` | Terraform fmt, validate, plan |
+| `terraform-apply-backend.yml` | PR labeled `ready-for-tf-apply` + targets `main` | Terraform apply |
+| `docker-build-push.yml` | Push of tag `v*` | Build & push Docker image; open deployment PR |
+| `deploy-to-ec2.yml` | Push to `main` touching `deployment-version.txt` | SSH deploy with canary health check + rollback |
+| `static-deploy.yml` | Push to `main` touching `frontend/static/**` | S3 sync + CloudFront invalidation |
+| `deploy-grafana.yml` | Push to `main` touching `observability-stack/**` | SCP files + `docker-compose up` |
+
+**Required GitHub Secrets:**
+
+| Secret | Used by |
+|---|---|
+| `TF_API_TOKEN` | All Terraform workflows |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Deploy, static-deploy, deploy-grafana |
+| `AWS_REGION` | Deploy, static-deploy, deploy-grafana |
+| `DOCKER_USERNAME` / `DOCKER_PASSWORD` | docker-build-push, deploy-to-ec2 |
+| `EC2_USER` / `EC2_SSH_KEY` | deploy-to-ec2, deploy-grafana |
+| `BUCKET_NAME` | static-deploy |
+| `DISTRIBUTION_ID` | static-deploy |
+| `PERSONAL_ACCESS_TOKEN` | docker-build-push (PR creation) |
+
+---
+
+## Security Considerations
+
+- EC2 HTTP/HTTPS ingress is restricted to the [CloudFront managed prefix list](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/LocationsOfEdgeServers.html) — direct internet access to the instance is blocked
+- SSH access is gated via `ssh_allowed_cidr` — set this to your IP in production, not `0.0.0.0/0`
+- The Flask container runs as a non-root user (`appuser`)
+- All viewer traffic is redirected to HTTPS at CloudFront (`redirect-to-https`)
+- TLS minimum version: `TLSv1.2_2021`
+- S3 bucket is private; CloudFront accesses it via Origin Access Control (OAC)
+
+---
+
+## How to Use
+
+```bash
+git clone https://github.com/denisgulev/gitops-playground.git
+cd gitops-playground
+```
+
+1. Create a Terraform Cloud organization and two workspaces: `Backend` and `Frontend`
+2. Create a Route 53 hosted zone for your domain and point your registrar's NS records to it
+3. Create an S3 bucket for Terraform state (or use Terraform Cloud's built-in state)
+4. Fill in `backend/infra/terraform.tfvars` and `frontend/infra/terraform.tfvars` (copy from `.example` files)
+5. Set all Terraform variables and GitHub secrets listed above
+6. Apply backend infrastructure first (`backend/infra/`), then frontend (`frontend/infra/`)
+7. Push a version tag to trigger the first Docker build and deployment
+
+---
+
+## Further Reading
+
+- [Deploy a Static Website with AWS S3, CloudFront, and Terraform](https://denisgulev.com/static-website-with-aws-s3-cloudfront-and-terraform/)
+- [Deploy a Flask Backend on AWS EC2 with Terraform](https://denisgulev.com/deploy-flask-backend-on-aws-ec2-with-terraform/)
+
 
 This repository provides Terraform templates to quickly deploy both a static frontend website and a backend service using AWS infrastructure. The frontend is hosted on AWS S3, with CloudFront for content distribution and Route 53 for DNS management.
 The backend service is a Flask app that runs as docker container inside an EC2 instance.
@@ -132,7 +391,7 @@ Problem:
     resource "aws_ssm_parameter" "ec2_dns" {
       name  = "/infra/ec2/public_dns"
       type  = "String"
-      value = aws_instance.flask_app.public_dns
+      value = aws_eip.flask_app_eip.public_dns
     }
   ```
 - the frontend retrieves this parameter, if this is not found, a default value is set (in order to allow the static page to function)
