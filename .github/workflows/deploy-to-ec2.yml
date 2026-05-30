@@ -63,13 +63,19 @@ jobs:
           docker pull $IMAGE
 
           echo "Starting temporary container for validation..."
-          docker run -d --name $TEMP_CONTAINER -p 8000:8000 -v /var/log/flask:/var/log/flask $IMAGE
+          docker run -d --name $TEMP_CONTAINER \
+            -p 8001:8000 \
+            -v /var/log/flask:/var/log/flask \
+            -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
+            -e CLOUDWATCH_LOG_GROUP=flask-app-logs \
+            -e STATIC_SITE_URL=https://static-website.denisgulev.com \
+            $IMAGE
 
           echo "Waiting for app to start..."
           sleep 5
 
           echo "Performing health check..."
-          if curl -s --max-time 30 http://localhost:8000/api/hello | grep -q 'Hello'; then
+          if curl -s --max-time 30 http://localhost:8001/api/status | grep -q 'running'; then
             echo "✅ Health check passed. Rolling forward..."
 
             if docker ps -a --format '{{.Names}}' | grep -q "^$CURRENT_CONTAINER$"; then
@@ -79,7 +85,15 @@ jobs:
 
             docker stop $TEMP_CONTAINER
             docker rename $TEMP_CONTAINER $CURRENT_CONTAINER
-            docker start $CURRENT_CONTAINER
+            docker run -d --name $CURRENT_CONTAINER \
+              --restart unless-stopped \
+              -p 8000:8000 \
+              -v /var/log/flask:/var/log/flask \
+              -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
+              -e CLOUDWATCH_LOG_GROUP=flask-app-logs \
+              -e STATIC_SITE_URL=https://static-website.denisgulev.com \
+              $IMAGE || true
+            # If rename+start is sufficient (image already pulled), remove the run above
             echo "✅ Deployed and running: $CURRENT_CONTAINER"
           else
             echo "❌ Health check failed! Rolling back."

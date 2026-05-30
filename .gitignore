@@ -16,3 +16,7 @@ backend/infra/.terraform/
 local-env-vars
 
 flask-key.pem
+
+.idea
+
+.DS_Store
