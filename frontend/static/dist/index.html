@@ -7,14 +7,17 @@
     <title>GitOps Playground</title>
     <style>
         :root {
-            --primary-color: #4CAF50;
+            --primary: #4CAF50;
             --primary-hover: #388e3c;
-            --text-color: #333;
-            --background-color: #f4f6f8;
+            --text: #333;
+            --muted: #888;
+            --bg: #f4f6f8;
             --card-bg: #fff;
-            --error-color: #e74c3c;
-            --success-color: #2ecc71;
-            --muted-color: #888;
+            --error: #e74c3c;
+            --ok: #2ecc71;
+            --border: #e0e0e0;
+            --tag-bg: #eef6ee;
+            --tag-text: #2e7d32;
         }
 
         * {
@@ -24,103 +27,492 @@
         body {
             margin: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--background-color);
-            color: var(--text-color);
+            background: var(--bg);
+            color: var(--text);
             display: flex;
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
-            padding: 48px 20px;
+            padding: 48px 20px 64px;
         }
 
+        a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* ── Hero ── */
         header {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 48px;
         }
 
         header h1 {
-            color: var(--primary-color);
-            margin: 0 0 8px;
-            font-size: 2rem;
+            font-size: 2.2rem;
+            color: var(--primary);
+            margin: 0 0 10px;
         }
 
         header p {
-            color: var(--muted-color);
-            font-size: 0.95rem;
-            margin: 0;
+            color: var(--muted);
+            font-size: 1rem;
+            margin: 0 0 20px;
         }
 
+        .github-link {
+            display: inline-block;
+            background: var(--primary);
+            color: #fff;
+            padding: 9px 20px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+
+        .github-link:hover {
+            background: var(--primary-hover);
+            text-decoration: none;
+        }
+
+        /* ── Layout ── */
         main {
             width: 100%;
-            max-width: 480px;
+            max-width: 860px;
         }
 
-        .card {
-            background-color: var(--card-bg);
-            padding: 28px 24px;
-            border-radius: 12px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-            margin-bottom: 20px;
+        section {
+            margin-bottom: 36px;
         }
 
-        .card h2 {
+        section>h2 {
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
             margin: 0 0 16px;
-            font-size: 1.1rem;
-            color: var(--text-color);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        /* ── Stack grid ── */
+        .stack-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 14px;
+        }
+
+        .stack-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 18px 16px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+        }
+
+        .stack-card h3 {
+            margin: 0 0 12px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .tag {
+            background: var(--tag-bg);
+            color: var(--tag-text);
+            font-size: 0.75rem;
+            padding: 3px 9px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+
+        /* ── Status card ── */
+        .status-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 24px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+        }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.9rem;
+        }
+
+        .status-row:last-child {
+            border-bottom: none;
+        }
+
+        .status-key {
+            color: var(--muted);
+            width: 100px;
+            flex-shrink: 0;
+        }
+
+        .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--muted);
+            flex-shrink: 0;
+        }
+
+        .dot.ok {
+            background: var(--ok);
+        }
+
+        .dot.err {
+            background: var(--error);
+        }
+
+        .code {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        /* ── API tester ── */
+        .api-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 24px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
         }
 
         .button-row {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
+            margin-bottom: 20px;
         }
 
         button {
-            background-color: var(--primary-color);
-            color: white;
+            background: var(--primary);
+            color: #fff;
             border: none;
-            padding: 10px 18px;
-            font-size: 0.9rem;
+            padding: 9px 18px;
+            font-size: 0.88rem;
             border-radius: 6px;
             cursor: pointer;
-            transition: background-color 0.2s ease, opacity 0.2s ease;
+            transition: background 0.2s, opacity 0.2s;
         }
 
         button:hover:not(:disabled) {
-            background-color: var(--primary-hover);
+            background: var(--primary-hover);
         }
 
         button:disabled {
-            opacity: 0.6;
+            opacity: 0.55;
             cursor: not-allowed;
         }
 
-        #response {
-            margin-top: 20px;
-            font-size: 0.9rem;
-            word-break: break-word;
+        .response-label {
+            font-size: 0.75rem;
+            color: var(--muted);
+            margin-bottom: 6px;
         }
 
         .response-box {
-            background-color: #f8f8f8;
-            border: 1px solid #e0e0e0;
+            background: #f8f8f8;
+            border: 1px solid var(--border);
             border-radius: 6px;
             padding: 12px 14px;
             font-family: 'Courier New', monospace;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             white-space: pre-wrap;
+            word-break: break-word;
         }
 
-        .error {
-            color: var(--error-color);
-        }
-
-        .label {
-            font-size: 0.75rem;
-            color: var(--muted-color);
-            margin-bottom: 6px;
+        .response-box.error {
+            color: var(--error);
         }
     </style>
+</head>
+
+<body>
+    <header>
+        <h1>GitOps Playground</h1>
+        <p>Flask API on EC2 &mdash; Static site on S3 &mdash; Served via CloudFront &mdash; Automated with Terraform
+            &amp; GitHub Actions</p>
+        <a class="github-link" href="https://github.com/denisgulev/gitops-playground" target="_blank"
+            rel="noopener">View on GitHub</a>
+    </header>
+
+    <main>
+        <!-- Stack overview -->
+        <section>
+            <h2>Infrastructure Stack</h2>
+            <div class="stack-grid" id="stack-grid">
+                <!-- populated by /api/about or fallback -->
+            </div>
+        </section>
+
+        <!-- Live status -->
+        <section>
+            <h2>Live API Status</h2>
+            <div class="status-card" id="status-card">
+                <div class="status-row"><span class="dot"></span><span
+                        class="status-key">Status</span><span>Loading…</span></div>
+            </div>
+        </section>
+
+        <!-- API tester -->
+        <section>
+            <h2>API Explorer</h2>
+            <div class="api-card">
+                <div class="button-row">
+                    <button onclick="callApi('/api/hello')">Hello</button>
+                    <button onclick="callApi('/api/info')">Info</button>
+                    <button onclick="callApi('/api/status')">Status</button>
+                    <button onclick="callApi('/api/about')">About</button>
+                </div>
+                <div id="api-response"></div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        var API_BASE = 'https://api.denisgulev.com';
+
+        /* ── Helpers ── */
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function setLoading(loading) {
+            var buttons = document.querySelectorAll('button');
+            for (var i = 0; i < buttons.length; i++) {
+                buttons[i].disabled = loading;
+            }
+        }
+
+        /* ── Stack grid ── */
+        var FALLBACK_STACK = {
+            frontend: ['S3', 'CloudFront', 'Route 53', 'ACM'],
+            backend: ['EC2', 'Docker', 'Flask', 'Gunicorn', 'Nginx'],
+            infrastructure: ['Terraform', 'Terraform Cloud'],
+            ci_cd: ['GitHub Actions'],
+            observability: ['Grafana', 'Loki', 'Promtail', 'Tempo']
+        };
+
+        var LAYER_LABELS = {
+            frontend: 'Frontend',
+            backend: 'Backend',
+            infrastructure: 'Infrastructure',
+            ci_cd: 'CI / CD',
+            observability: 'Observability'
+        };
+
+        function renderStack(stack) {
+            var grid = document.getElementById('stack-grid');
+            var html = '';
+            var keys = Object.keys(stack);
+            for (var i = 0; i < keys.length; i++) {
+                var key = keys[i];
+                var label = LAYER_LABELS[key] || key;
+                var items = stack[key];
+                var tagsHtml = '';
+                for (var j = 0; j < items.length; j++) {
+                    tagsHtml += '<span class="tag">' + escapeHtml(items[j]) + '</span>';
+                }
+                html += '<div class="stack-card"><h3>' + escapeHtml(label) + '</h3><div class="tags">' + tagsHtml + '</div></div>';
+            }
+            grid.innerHTML = html;
+        }
+
+        /* ── Status panel ── */
+        function renderStatus(data, isError) {
+            var card = document.getElementById('status-card');
+            if (isError) {
+                card.innerHTML = '<div class="status-row"><span class="dot err"></span><span class="status-key">Status</span><span>API unreachable</span></div>';
+                return;
+            }
+            var dotClass = data.status === 'ok' ? 'ok' : 'err';
+            card.innerHTML =
+                '<div class="status-row"><span class="dot ' + dotClass + '"></span><span class="status-key">Status</span><span>' + escapeHtml(data.status) + '</span></div>' +
+                '<div class="status-row"><span class="dot"></span><span class="status-key">Version</span><span class="code">' + escapeHtml(data.version || 'unknown') + '</span></div>' +
+                '<div class="status-row"><span class="dot"></span><span class="status-key">Region</span><span class="code">' + escapeHtml(data.region || '—') + '</span></div>' +
+                '<div class="status-row"><span class="dot"></span><span class="status-key">Static site</span><span class="code"><a href="' + escapeHtml(data.static_site || '#') + '" target="_blank" rel="noopener">' + escapeHtml(data.static_site || '—') + '</a></span></div>';
+        }
+
+        /* ── Boot: load /api/about and /api/status ── */
+        function loadAbout() {
+            fetch(API_BASE + '/api/about')
+                .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+                .then(function (data) { renderStack(data.stack || FALLBACK_STACK); })
+                .catch(function () { renderStack(FALLBACK_STACK); });
+        }
+
+        function loadStatus() {
+            fetch(API_BASE + '/api/status')
+                .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+                .then(function (data) { renderStatus(data, false); })
+                .catch(function () { renderStatus(null, true); });
+        }
+
+        /* ── API Explorer ── */
+        async function callApi(path) {
+            var responseEl = document.getElementById('api-response');
+            responseEl.innerHTML = '<p class="response-label">Loading…</p>';
+            setLoading(true);
+            try {
+                var response = await fetch(API_BASE + path, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                var text = await response.text();
+                var display;
+                try { display = JSON.stringify(JSON.parse(text), null, 2); } catch (_) { display = text; }
+                var boxClass = response.ok ? 'response-box' : 'response-box error';
+                var label = response.ok ? 'Response from ' + path : 'Error ' + response.status + ' from ' + path;
+                responseEl.innerHTML = '<p class="response-label">' + escapeHtml(label) + '</p><div class="' + boxClass + '">' + escapeHtml(display) + '</div>';
+            } catch (err) {
+                console.warn('API call failed:', path, err);
+                responseEl.innerHTML = '<p class="response-label">Network error</p><div class="response-box error">Could not reach ' + escapeHtml(API_BASE + path) + '</div>';
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        loadAbout();
+        loadStatus();
+    </script>
+</body>
+
+</html>
+
+<style>
+    :root {
+        --primary-color: #4CAF50;
+        --primary-hover: #388e3c;
+        --text-color: #333;
+        --background-color: #f4f6f8;
+        --card-bg: #fff;
+        --error-color: #e74c3c;
+        --success-color: #2ecc71;
+        --muted-color: #888;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: var(--background-color);
+        color: var(--text-color);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        padding: 48px 20px;
+    }
+
+    header {
+        text-align: center;
+        margin-bottom: 40px;
+    }
+
+    header h1 {
+        color: var(--primary-color);
+        margin: 0 0 8px;
+        font-size: 2rem;
+    }
+
+    header p {
+        color: var(--muted-color);
+        font-size: 0.95rem;
+        margin: 0;
+    }
+
+    main {
+        width: 100%;
+        max-width: 480px;
+    }
+
+    .card {
+        background-color: var(--card-bg);
+        padding: 28px 24px;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+    }
+
+    .card h2 {
+        margin: 0 0 16px;
+        font-size: 1.1rem;
+        color: var(--text-color);
+    }
+
+    .button-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    button {
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        padding: 10px 18px;
+        font-size: 0.9rem;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background-color 0.2s ease, opacity 0.2s ease;
+    }
+
+    button:hover:not(:disabled) {
+        background-color: var(--primary-hover);
+    }
+
+    button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    #response {
+        margin-top: 20px;
+        font-size: 0.9rem;
+        word-break: break-word;
+    }
+
+    .response-box {
+        background-color: #f8f8f8;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 12px 14px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+    }
+
+    .error {
+        color: var(--error-color);
+    }
+
+    .label {
+        font-size: 0.75rem;
+        color: var(--muted-color);
+        margin-bottom: 6px;
+    }
+</style>
 </head>
 
 <body>
