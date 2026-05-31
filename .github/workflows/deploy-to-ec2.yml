@@ -69,13 +69,14 @@ jobs:
             -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
             -e CLOUDWATCH_LOG_GROUP=flask-app-logs \
             -e STATIC_SITE_URL=https://static-website.denisgulev.com \
+            -e APP_VERSION=${{ steps.get_tag.outputs.TAG }} \
             $IMAGE
 
           echo "Waiting for app to start..."
           sleep 5
 
           echo "Performing health check..."
-          if curl -s --max-time 30 http://localhost:8001/api/status | grep -q 'running'; then
+          if curl -s --max-time 30 http://localhost:8001/api/status | grep -q '"ok"'; then
             echo "✅ Health check passed. Rolling forward..."
 
             if docker ps -a --format '{{.Names}}' | grep -q "^$CURRENT_CONTAINER$"; then
@@ -92,6 +93,7 @@ jobs:
               -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
               -e CLOUDWATCH_LOG_GROUP=flask-app-logs \
               -e STATIC_SITE_URL=https://static-website.denisgulev.com \
+              -e APP_VERSION=${{ steps.get_tag.outputs.TAG }} \
               $IMAGE || true
             # If rename+start is sufficient (image already pulled), remove the run above
             echo "✅ Deployed and running: $CURRENT_CONTAINER"
