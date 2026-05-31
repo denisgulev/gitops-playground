@@ -1,4 +1,6 @@
 from flask import Flask, jsonify, request, redirect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import logging
 import watchtower
 import os
@@ -47,6 +49,14 @@ logger.info("Logging to file + CloudWatch is active.")
 # App
 app = Flask(__name__)
 FlaskInstrumentor().instrument_app(app)
+
+# Rate Limiter
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
 
 otlp_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://tempo:4318/v1/traces")
 trace_provider = TracerProvider()

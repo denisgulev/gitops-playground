@@ -5,3 +5,4 @@ opentelemetry-api==1.33.0
 opentelemetry-sdk==1.33.0
 opentelemetry-instrumentation-flask==0.54b0
 opentelemetry-exporter-otlp==1.33.0
+flask-limiter==3.9.0
