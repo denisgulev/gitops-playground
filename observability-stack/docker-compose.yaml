@@ -8,6 +8,9 @@ services:
       - "3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./provisioning/dashboards:/var/lib/grafana/dashboards:ro
     env_file:
       - .env
     depends_on:

@@ -1,0 +1,97 @@
+{
+    "title": "Flask App",
+    "uid": "flask-app",
+    "schemaVersion": 38,
+    "panels": [
+        {
+            "title": "Live Logs",
+            "type": "logs",
+            "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 24,
+                "h": 8
+            },
+            "datasource": {
+                "type": "loki",
+                "uid": "${DS_LOKI}"
+            },
+            "targets": [
+                {
+                    "expr": "{job=\"flask\"}",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "title": "Request Rate",
+            "type": "timeseries",
+            "gridPos": {
+                "x": 0,
+                "y": 8,
+                "w": 12,
+                "h": 8
+            },
+            "datasource": {
+                "type": "loki",
+                "uid": "${DS_LOKI}"
+            },
+            "targets": [
+                {
+                    "expr": "rate({job=\"flask\"}[1m])",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "title": "Error Count (1h)",
+            "type": "stat",
+            "gridPos": {
+                "x": 12,
+                "y": 8,
+                "w": 6,
+                "h": 8
+            },
+            "datasource": {
+                "type": "loki",
+                "uid": "${DS_LOKI}"
+            },
+            "targets": [
+                {
+                    "expr": "count_over_time({job=\"flask\"} |= \"ERROR\" [1h])",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "title": "Nginx Logs",
+            "type": "logs",
+            "gridPos": {
+                "x": 0,
+                "y": 16,
+                "w": 24,
+                "h": 8
+            },
+            "datasource": {
+                "type": "loki",
+                "uid": "${DS_LOKI}"
+            },
+            "targets": [
+                {
+                    "expr": "{job=\"nginx\"}",
+                    "refId": "A"
+                }
+            ]
+        }
+    ],
+    "templating": {
+        "list": [
+            {
+                "name": "DS_LOKI",
+                "type": "datasource",
+                "query": "loki",
+                "hide": 2
+            }
+        ]
+    }
+}
