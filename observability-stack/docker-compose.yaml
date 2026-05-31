@@ -12,8 +12,8 @@ services:
       - .env
     depends_on:
       - loki
-      - tempo
-      - mimir
+      # - tempo
+      # - mimir
       - prometheus
     networks:
       - observability
