@@ -15,8 +15,6 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 aws_region = os.environ.get("AWS_REGION", "eu-south-1")
 log_group = os.environ.get("CLOUDWATCH_LOG_GROUP", "flask-app-logs")
 
-log_dir = "/var/log/flask"
-
 # Create logger
 logger = logging.getLogger("flask_app")
 logger.setLevel(logging.INFO)
@@ -25,13 +23,10 @@ formatter = logging.Formatter(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 
-# File Handler for Promtail
-try:
-    file_handler = logging.FileHandler(os.path.join(log_dir, "app.log"))
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-except PermissionError:
-    logger.warning(f"Could not open log file in {log_dir}, skipping file handler.")
+# Stream Handler (stdout — captured by Docker, shipped by Promtail)
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(formatter)
+logger.addHandler(stream_handler)
 
 # CloudWatch Handler
 try:
