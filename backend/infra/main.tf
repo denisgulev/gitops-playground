@@ -31,8 +31,9 @@ resource "aws_instance" "flask_app" {
   user_data_replace_on_change = true
 
   user_data = templatefile("${path.module}/user_data.sh", {
-    aws_region = var.aws_region,
-    api_domain = "api.${var.domain_name}"
+    aws_region      = var.aws_region,
+    api_domain      = "api.${var.domain_name}",
+    static_site_url = "https://static-website.${var.domain_name}"
   })
 
   tags = {
