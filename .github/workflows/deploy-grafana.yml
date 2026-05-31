@@ -116,7 +116,7 @@ jobs:
           DEPLOY_DIR="/home/ec2-user/observability-stack"
 
           # Ensure Docker Compose v2 is installed
-          if ! docker compose version >/dev/null 2>&1; then
+          if ! docker-compose version >/dev/null 2>&1; then
             echo "Installing Docker Compose..."
             DOCKER_COMPOSE_VERSION="v2.36.0"
             curl -sSL "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-aarch64" -o /tmp/docker-compose
@@ -127,9 +127,9 @@ jobs:
 
           echo "Deploying observability stack..."
           cd "$DEPLOY_DIR"
-          docker compose down
-          docker compose pull
-          docker compose up -d
+          docker-compose down
+          docker-compose pull
+          docker-compose up -d
           echo "Done."
           EOF
 
