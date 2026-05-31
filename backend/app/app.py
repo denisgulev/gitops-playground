@@ -5,11 +5,12 @@ import logging
 import watchtower
 import os
 
-from opentelemetry import trace
-from opentelemetry.instrumentation.flask import FlaskInstrumentor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
+# Tempo (distributed tracing) — uncomment when tempo is enabled in observability-stack/docker-compose.yaml
+# from opentelemetry import trace
+# from opentelemetry.instrumentation.flask import FlaskInstrumentor
+# from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+# from opentelemetry.sdk.trace import TracerProvider
+# from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 # AWS region and log group from environment variables or defaults
 aws_region = os.environ.get("AWS_REGION", "eu-south-1")
@@ -43,7 +44,7 @@ logger.info("Logging to file + CloudWatch is active.")
 
 # App
 app = Flask(__name__)
-FlaskInstrumentor().instrument_app(app)
+# FlaskInstrumentor().instrument_app(app)  # Tempo — uncomment when tempo is enabled
 
 # Rate Limiter
 limiter = Limiter(
@@ -53,12 +54,12 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 
-otlp_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://tempo:4318/v1/traces")
-trace_provider = TracerProvider()
-trace_provider.add_span_processor(
-    BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
-)
-trace.set_tracer_provider(trace_provider)
+# otlp_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://tempo:4318/v1/traces")  # Tempo — uncomment when tempo is enabled
+# trace_provider = TracerProvider()
+# trace_provider.add_span_processor(
+#     BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
+# )
+# trace.set_tracer_provider(trace_provider)
 
 STATIC_SITE_URL = os.environ.get("STATIC_SITE_URL", "https://static-website.example.com")
 APP_VERSION = os.environ.get("APP_VERSION", "unknown")
