@@ -190,3 +190,4 @@ The observability instance's security group only needs to accept ports 3100 (Lok
 | Mimir | ~250 MB |
 | **Full stack total** | **~950 MB** |
 | **Current (Loki only)** | **~400 MB** |
+
