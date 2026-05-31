@@ -65,7 +65,6 @@ jobs:
           echo "Starting temporary container for validation..."
           docker run -d --name $TEMP_CONTAINER \
             -p 8001:8000 \
-            -v /var/log/flask:/var/log/flask \
             -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
             -e CLOUDWATCH_LOG_GROUP=flask-app-logs \
             -e STATIC_SITE_URL=https://static-website.denisgulev.com \
@@ -90,7 +89,6 @@ jobs:
             docker run -d --name $CURRENT_CONTAINER \
               --restart unless-stopped \
               -p 8000:8000 \
-              -v /var/log/flask:/var/log/flask \
               -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
               -e CLOUDWATCH_LOG_GROUP=flask-app-logs \
               -e STATIC_SITE_URL=https://static-website.denisgulev.com \
