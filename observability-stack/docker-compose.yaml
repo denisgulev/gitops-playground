@@ -14,7 +14,7 @@ services:
       - loki
       # - tempo
       # - mimir
-      - prometheus
+      # - prometheus
     networks:
       - observability
     restart: unless-stopped
