@@ -48,7 +48,3 @@ EOF
 
 # Enable Nginx
 systemctl enable --now nginx
-
-# Create log directory for Flask (world-writable so any container user can write)
-mkdir -p /var/log/flask
-chmod 777 /var/log/flask
