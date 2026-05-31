@@ -77,15 +77,16 @@ jobs:
 
           echo "Performing health check..."
           if curl -s --max-time 30 http://localhost:8001/api/status | grep -q '"ok"'; then
-            echo "✅ Health check passed. Rolling forward..."
+            echo "✅ Health check passed. Promoting to production..."
 
-            if docker ps -a --format '{{.Names}}' | grep -q "^$CURRENT_CONTAINER$"; then
+            docker stop $TEMP_CONTAINER
+            docker rm $TEMP_CONTAINER
+
+            if docker ps -a --format '{{.Names}}' | grep -q "^${CURRENT_CONTAINER}$"; then
               docker stop $CURRENT_CONTAINER
               docker rm $CURRENT_CONTAINER
             fi
 
-            docker stop $TEMP_CONTAINER
-            docker rename $TEMP_CONTAINER $CURRENT_CONTAINER
             docker run -d --name $CURRENT_CONTAINER \
               --restart unless-stopped \
               -p 8000:8000 \
@@ -94,13 +95,12 @@ jobs:
               -e CLOUDWATCH_LOG_GROUP=flask-app-logs \
               -e STATIC_SITE_URL=https://static-website.denisgulev.com \
               -e APP_VERSION=${{ steps.get_tag.outputs.TAG }} \
-              $IMAGE || true
-            # If rename+start is sufficient (image already pulled), remove the run above
+              $IMAGE
             echo "✅ Deployed and running: $CURRENT_CONTAINER"
           else
             echo "❌ Health check failed! Rolling back."
             docker stop $TEMP_CONTAINER
             docker rm $TEMP_CONTAINER
-            echo "🚫 Deployment aborted. Old container remains running."
+            echo "🚫 Deployment aborted. Old container still running."
             exit 1
           fi
