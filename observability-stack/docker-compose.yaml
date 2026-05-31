@@ -44,57 +44,57 @@ services:
       - observability
     restart: unless-stopped
 
-  tempo:
-    image: grafana/tempo:2.7.2
-    container_name: tempo
-    ports:
-      - "3200:3200" # HTTP API
-      - "4317:4317" # OTLP gRPC
-      - "4318:4318" # OTLP HTTP
-    volumes:
-      - ./tempo-config.yaml:/etc/tempo.yaml
-      - tempo-data:/tmp/tempo
-    command: [ "--config.file=/etc/tempo.yaml" ]
-    networks:
-      - observability
-    restart: unless-stopped
+  # tempo:
+  #   image: grafana/tempo:2.7.2
+  #   container_name: tempo
+  #   ports:
+  #     - "3200:3200" # HTTP API
+  #     - "4317:4317" # OTLP gRPC
+  #     - "4318:4318" # OTLP HTTP
+  #   volumes:
+  #     - ./tempo-config.yaml:/etc/tempo.yaml
+  #     - tempo-data:/tmp/tempo
+  #   command: [ "--config.file=/etc/tempo.yaml" ]
+  #   networks:
+  #     - observability
+  #   restart: unless-stopped
 
-  mimir:
-    image: grafana/mimir:2.15.0
-    container_name: mimir
-    ports:
-      - "9009:9009"
-    command: [ "-config.file=/etc/mimir.yaml" ]
-    volumes:
-      - ./mimir-config.yaml:/etc/mimir.yaml
-      - mimir-data:/tmp/mimir-data
-    networks:
-      - observability
-    restart: unless-stopped
+  # mimir:
+  #   image: grafana/mimir:2.15.0
+  #   container_name: mimir
+  #   ports:
+  #     - "9009:9009"
+  #   command: [ "-config.file=/etc/mimir.yaml" ]
+  #   volumes:
+  #     - ./mimir-config.yaml:/etc/mimir.yaml
+  #     - mimir-data:/tmp/mimir-data
+  #   networks:
+  #     - observability
+  #   restart: unless-stopped
 
-  prometheus:
-    image: prom/prometheus:v3.4.0
-    container_name: prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yaml:/etc/prometheus/prometheus.yaml
-      - prometheus-data:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yaml"
-      - "--storage.tsdb.path=/prometheus"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - observability
-    restart: unless-stopped
+  # prometheus:
+  #   image: prom/prometheus:v3.4.0
+  #   container_name: prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./prometheus.yaml:/etc/prometheus/prometheus.yaml
+  #     - prometheus-data:/prometheus
+  #   command:
+  #     - "--config.file=/etc/prometheus/prometheus.yaml"
+  #     - "--storage.tsdb.path=/prometheus"
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   networks:
+  #     - observability
+  #   restart: unless-stopped
 
 volumes:
   grafana-data:
   loki-data:
-  tempo-data:
-  mimir-data:
-  prometheus-data:
+  # tempo-data:
+  # mimir-data:
+  # prometheus-data:
 
 
 networks:
