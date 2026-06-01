@@ -104,15 +104,27 @@ jobs:
 
         # Strip 8-space heredoc indentation introduced by YAML, then base64-encode
         sed -i 's/^        //' /tmp/deploy.sh
-        ENCODED=$(base64 -w 0 /tmp/deploy.sh)
+        
+        # Use Python to build valid JSON for --cli-input-json.
+        # AWS CLI shorthand treats '=' as a key/value separator — base64 padding
+        # breaks it. python3 + json.dump produces correctly escaped JSON with no
+        # quoting ambiguity.
+        python3 - "$INSTANCE_ID" /tmp/deploy.sh << 'PYEOF'
+import json, sys
+instance_id = sys.argv[1]
+script = open(sys.argv[2]).read()
+payload = {
+    "InstanceIds":  [instance_id],
+    "DocumentName": "AWS-RunShellScript",
+    "Parameters":   {"commands": [script], "executionTimeout": ["300"]},
+    "TimeoutSeconds": 300,
+}
+with open("/tmp/ssm_payload.json", "w") as f:
+    json.dump(payload, f)
+PYEOF
 
-        # Single quotes around --parameters prevent shell from interpreting $ENCODED;
-        # base64 alphabet [A-Za-z0-9+/=] contains no single quotes so splicing is safe.
         COMMAND_ID=$(aws ssm send-command \
-          --instance-ids "$INSTANCE_ID" \
-          --document-name "AWS-RunShellScript" \
-          --parameters 'commands=["echo '"$ENCODED"' | base64 -d | bash"],executionTimeout=["300"]' \
-          --timeout-seconds 300 \
+          --cli-input-json file:///tmp/ssm_payload.json \
           --query "Command.CommandId" \
           --output text)
 
