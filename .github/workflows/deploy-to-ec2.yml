@@ -102,13 +102,12 @@ jobs:
         fi
         EOF
 
-        # Base64-encode the script to safely pass it through SSM without quoting issues
-        ENCODED=$(base64 -w 0 /tmp/deploy.sh)
+        PARAMS=$(jq -n --arg cmd "$(cat /tmp/deploy.sh)" '{commands: [$cmd], executionTimeout: ["300"]}')
 
         COMMAND_ID=$(aws ssm send-command \
           --instance-ids "$INSTANCE_ID" \
           --document-name "AWS-RunShellScript" \
-          --parameters "commands=[\"echo '$ENCODED' | base64 -d | bash\"]" \
+          --parameters "$PARAMS" \
           --timeout-seconds 300 \
           --query "Command.CommandId" \
           --output text)
