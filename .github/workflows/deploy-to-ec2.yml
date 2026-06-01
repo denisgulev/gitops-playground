@@ -102,17 +102,23 @@ jobs:
         fi
         EOF
 
-        PARAMS=$(jq -n --arg cmd "$(cat /tmp/deploy.sh)" '{commands: [$cmd], executionTimeout: ["300"]}')
+        # Strip 8-space heredoc indentation introduced by YAML, then base64-encode
+        sed -i 's/^        //' /tmp/deploy.sh
+        ENCODED=$(base64 -w 0 /tmp/deploy.sh)
 
+        # Single quotes around --parameters prevent shell from interpreting $ENCODED;
+        # base64 alphabet [A-Za-z0-9+/=] contains no single quotes so splicing is safe.
         COMMAND_ID=$(aws ssm send-command \
           --instance-ids "$INSTANCE_ID" \
           --document-name "AWS-RunShellScript" \
-          --parameters "$PARAMS" \
+          --parameters 'commands=["echo '"$ENCODED"' | base64 -d | bash"],executionTimeout=["300"]' \
           --timeout-seconds 300 \
           --query "Command.CommandId" \
           --output text)
 
         echo "SSM Command ID: $COMMAND_ID"
+
+        sleep 10
 
         echo "Waiting for SSM command to complete (max 10 min)..."
         for i in $(seq 1 60); do
