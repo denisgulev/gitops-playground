@@ -163,6 +163,18 @@ To capture additional host log files (e.g. system logs), add a new `scrape_confi
 ### Move to a Dedicated Observability Instance
 
 On a `t4g.nano` (512 MB), only Grafana + Loki + Promtail fits comfortably (~400 MB).
+Running the full observability stack alongside the Flask app on the same instance exhausts available RAM. This causes the OS to rely heavily on swap, making all processes — including the SSM agent and Docker daemon — extremely slow. Deployment commands can stall or time out as a result.
+
+> **Important:** if the observability stack is running during a deployment, stop it first:
+> ```bash
+> cd /home/ec2-user/observability-stack
+> docker compose down
+> ```
+> Restart it after the deployment completes:
+> ```bash
+> docker compose up -d
+> ```
+
 To run the full stack, either:
 
 - **Upgrade** the app instance to `t4g.medium` (4 GB) — change `instance_type` in `backend/infra/terraform.tfvars`
