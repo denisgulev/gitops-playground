@@ -110,18 +110,18 @@ jobs:
         # breaks it. python3 + json.dump produces correctly escaped JSON with no
         # quoting ambiguity.
         python3 - "$INSTANCE_ID" /tmp/deploy.sh << 'PYEOF'
-import json, sys
-instance_id = sys.argv[1]
-script = open(sys.argv[2]).read()
-payload = {
-    "InstanceIds":  [instance_id],
-    "DocumentName": "AWS-RunShellScript",
-    "Parameters":   {"commands": [script], "executionTimeout": ["300"]},
-    "TimeoutSeconds": 300,
-}
-with open("/tmp/ssm_payload.json", "w") as f:
-    json.dump(payload, f)
-PYEOF
+        import json, sys
+        instance_id = sys.argv[1]
+        script = open(sys.argv[2]).read()
+        payload = {
+            "InstanceIds":  [instance_id],
+            "DocumentName": "AWS-RunShellScript",
+            "Parameters":   {"commands": [script], "executionTimeout": ["300"]},
+            "TimeoutSeconds": 300,
+        }
+        with open("/tmp/ssm_payload.json", "w") as f:
+            json.dump(payload, f)
+        PYEOF
 
         COMMAND_ID=$(aws ssm send-command \
           --cli-input-json file:///tmp/ssm_payload.json \
