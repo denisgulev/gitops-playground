@@ -36,7 +36,7 @@ jobs:
         platforms: linux/arm64
         push: true
         tags: |
-          ${{ secrets.DOCKER_USERNAME }}/flask-app:${{ steps.tag.outputs.TAG }}
+          ${{ secrets.DOCKER_USERNAME }}/go-app:${{ steps.tag.outputs.TAG }}
     
     - name: Update deployment version file
       run: echo "${{ steps.tag.outputs.TAG }}" >> backend/app/deployment-version.txt

@@ -1,35 +1,24 @@
-# Use an official Python base image
-FROM python:3.11-slim
+# ── Build stage ───────────────────────────────────────────────────────────────
+FROM golang:1.22-alpine AS builder
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Create non-root user
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+COPY main.go .
+# CGO_ENABLED=0 produces a fully static binary — no libc dependency
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o app .
 
-# Create working directory
-WORKDIR /app
+# ── Runtime stage ─────────────────────────────────────────────────────────────
+FROM scratch
 
-# Copy and install pinned dependencies first (layer cache)
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY --from=builder /build/app /app
+# Copy TLS certs so HTTPS calls to CloudWatch work
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-# Copy app code into container
-COPY app.py .
-
-# Create log directory and assign ownership to non-root user
-RUN mkdir -p /var/log/flask && chown -R appuser:appgroup /var/log/flask /app
-
-# Switch to non-root user
-USER appuser
-
-# Expose the port the app will run on
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/status')"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD ["/app", "-healthcheck"]
 
-# Run with gunicorn for production
-CMD ["gunicorn", "--workers", "3", "--bind", "0.0.0.0:8000", "app:app"]
+ENTRYPOINT ["/app"]
