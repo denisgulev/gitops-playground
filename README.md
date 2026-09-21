@@ -46,11 +46,11 @@ Both domains (`static-website.domain.com` and `api.domain.com`) point to the **s
 ```
 .
 ├── backend/
-│   ├── app/                    # Flask application (Docker image)
-│   │   ├── app.py
+│   ├── app/                    # Go API (Docker image)
+│   │   ├── main.go
+│   │   ├── main_test.go
 │   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── deployment-version.txt
+│   │   └── go.mod / go.sum
 │   └── infra/                  # Terraform — EC2, VPC, IAM, EIP, SSM
 ├── frontend/
 │   ├── static/dist/            # Static HTML/JS deployed to S3
@@ -136,11 +136,16 @@ Managed via Terraform (workspace: `Backend`). See [backend/infra/README.md](back
 3. Add label `ready-for-tf-apply` → **Terraform Apply** runs (job-level guard)
 4. Merge PR
 
-For application deployments (Docker image updates):
+For application deployments (Docker image updates), everything is driven by `release.yml`:
 
-1. Merge to `main` and push a version tag (e.g. `v1.2.0`)
-2. `docker-build-push.yml` builds and pushes the image to Docker Hub, then opens a deployment PR
-3. Review and merge the deployment PR → `deploy-to-ec2.yml` SSHes into EC2, pulls the image, runs a canary health check, and promotes or rolls back
+1. Merge to `main`, then push a version tag on a commit that is on `main` (e.g. `git tag v1.2.0 && git push origin v1.2.0`)
+2. The workflow verifies the tag, runs the same checks as a PR (`ci.yml`), builds the image from the tagged commit and pushes it to Docker Hub
+3. The **deploy** job then waits for approval (GitHub Environment `production`, required reviewer)
+4. After approval it runs the deploy script on EC2 through SSM (canary container, health check, promote; the running container is untouched if the canary fails) and finally checks that the public API reports the new version
+
+**Rollback / redeploy:** Actions → *Release* → *Run workflow* → enter an existing tag (e.g. `v1.1.0`). The image is not rebuilt; the same approval and post-deploy check apply.
+
+**One-time setup:** create the `production` Environment with a required reviewer *before* the first release. GitHub silently creates a missing environment without protection rules, which would skip the approval.
 
 ---
 
@@ -209,23 +214,23 @@ Grafana is accessible only via the EC2 instance's IP — it is not exposed publi
 | `terraform-apply.yml` | PR labeled `ready-for-tf-apply` + targets `main` | Terraform apply |
 | `terraform-plan-backend.yml` | PR to `main` touching `backend/infra/**` | Terraform fmt, validate, plan |
 | `terraform-apply-backend.yml` | PR labeled `ready-for-tf-apply` + targets `main` | Terraform apply |
-| `docker-build-push.yml` | Push of tag `v*` | Build & push Docker image; open deployment PR |
-| `deploy-to-ec2.yml` | Push to `main` touching `deployment-version.txt` | SSH deploy with canary health check + rollback |
+| `ci.yml` | PR to `main` (and called by `release.yml`) | gofmt, vet, tests, actionlint, shellcheck, hadolint, govulncheck, image build + smoke test; single required check `CI gate` |
+| `release.yml` | Push of tag `vX.Y.Z`, or manual run with a tag | Verify tag → CI → build & push image → approval → deploy via SSM (canary) → verify public API version |
 | `static-deploy.yml` | Push to `main` touching `frontend/static/**` | S3 sync + CloudFront invalidation |
-| `deploy-grafana.yml` | Push to `main` touching `observability-stack/**` | SCP files + `docker-compose up` |
+| `deploy-grafana.yml` | Push to `main` touching `observability-stack/**`, or manual | EC2 downloads the repo at the commit (via SSM) and runs `docker-compose up -d` |
 
 **Required GitHub Secrets:**
 
 | Secret | Used by |
 |---|---|
 | `TF_API_TOKEN` | All Terraform workflows |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Deploy, static-deploy, deploy-grafana |
-| `AWS_REGION` | Deploy, static-deploy, deploy-grafana |
-| `DOCKER_USERNAME` / `DOCKER_PASSWORD` | docker-build-push, deploy-to-ec2 |
-| `EC2_USER` / `EC2_SSH_KEY` | deploy-to-ec2, deploy-grafana |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | release, static-deploy, deploy-grafana |
+| `AWS_REGION` | release, static-deploy, deploy-grafana |
+| `DOCKER_USERNAME` / `DOCKER_PASSWORD` | release |
 | `BUCKET_NAME` | static-deploy |
 | `DISTRIBUTION_ID` | static-deploy |
-| `PERSONAL_ACCESS_TOKEN` | docker-build-push (PR creation) |
+
+`PERSONAL_ACCESS_TOKEN`, `EC2_USER` and `EC2_SSH_KEY` are no longer used by any workflow and can be deleted.
 
 ---
 
@@ -515,7 +520,7 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
 
       1. The infrastructure code lives in the *backend/infra/* folder. Any PRs to the *main* branch that touch files in this folder will trigger the *terraform-plan-backend.yml* workflow. This kicks off a *terraform plan* process, and if that goes well, you can run *terraform apply* by adding the *ready-for-tf-apply* label to the PR.
 
-      2. The backend service runs in Docker. Whenever changes are made in the *backend/app* folder and a tag is pushed, the *docker-build-push.yml* workflow runs, building a Docker image and pushing it to Docker Hub.
+      2. The backend service runs in Docker. Whenever a version tag is pushed, the *release.yml* workflow runs the checks, builds a Docker image from the tagged commit and pushes it to Docker Hub, then deploys it after approval.
 
   - automate the deployment of docker image inside EC2 instance **DONE**
     
@@ -537,21 +542,18 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
       - Merge changes into main
       - Create a new Git tag (e.g., v1.0.0)
 
-    #### 3. ✅ Tag Push → Build & Push Docker Image + PR for Deployment
-      - GitHub Actions builds the image
-      - Tags and pushes it to Docker Hub (e.g., flask-app:v1.0.0)
-      - Appends the tag to **backend/app/deployment-version.txt**
-      - After the image is pushed to DockerHub, a pull request is created:
-      - From deploy/v1.0.0 → main
-      - Adds labels (deploy, needs-approval)
-      - Requires manual review/approval
+    #### 3. ✅ Tag Push → Checks → Build & Push Docker Image
+      - `release.yml` verifies the tag (format `vX.Y.Z`, on `main`) and runs the CI checks
+      - GitHub Actions builds the image from the tagged commit
+      - Tags and pushes it to Docker Hub (e.g., go-app:v1.0.0)
 
-    #### 4. ✅ Merge Deployment PR → Deploy to Production
-      - Merging the PR triggers a deploy workflow:
-        - Reads the latest tag from deployment-version.txt
-        - using SSH logs into the production EC2 instance
-        - Pulls and runs the new Docker image
-        - Rolls back if the container fails health checks
+    #### 4. ✅ Approval → Deploy to Production
+      - The deploy job waits for approval on the `production` Environment (required reviewer)
+      - After approval it runs `scripts/deploy-app.sh` on the EC2 instance through SSM:
+        - Pulls the new Docker image and starts a canary container
+        - Promotes it only if the canary health check passes; otherwise the running container is left untouched
+      - Finally checks that the public API reports the new version
+      - Roll back by running the workflow manually with an older tag
 
 - **Add Monitoring, Logging, and Alerts**  
   - Enable detailed **CloudWatch Logs** for backend (Nginx, Gunicorn, Flask).  
