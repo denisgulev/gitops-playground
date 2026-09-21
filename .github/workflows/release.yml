@@ -1,0 +1,136 @@
+name: Release
+
+# Push a tag vX.Y.Z (on a commit that is on main) to release:
+#   verify tag -> CI checks -> build and push image -> manual approval -> deploy -> verify.
+#
+# Run it by hand with an existing tag to redeploy that release, or to roll back
+# to an older one. The image is not rebuilt in that case.
+#
+# REQUIRES a GitHub Environment named `production` with required reviewers,
+# created BEFORE the first run: GitHub silently creates a missing environment
+# WITHOUT protection rules, which would skip the approval.
+run-name: Release ${{ inputs.tag || github.ref_name }}
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to deploy, e.g. v0.0.39 (the image is not rebuilt)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      # Full history: the script checks that the tagged commit is on main.
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check the release tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: bash scripts/release-verify-tag.sh
+
+  # Same checks as a PR (format, vet, tests, lint, vulnerabilities, image smoke test).
+  ci:
+    name: CI
+    needs: verify
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  build:
+    name: Build and push image
+    needs: [verify, ci]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # One build per tag.
+    concurrency:
+      group: release-build-${{ needs.verify.outputs.tag }}
+      cancel-in-progress: false
+    steps:
+      # A tag push checks out the tagged commit itself (not main).
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./backend/app
+          platforms: linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/go-app:${{ needs.verify.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.verify.outputs.tag }}
+          cache-from: type=gha,scope=image-release
+          cache-to: type=gha,mode=max,scope=image-release
+
+  deploy:
+    name: Deploy to production
+    needs: [verify, build]
+    # A skipped build is only acceptable for a manual redeploy/rollback. On a tag
+    # push, `build` is skipped when CI fails, and that must NOT deploy.
+    if: >-
+      ${{ !cancelled() && needs.verify.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' || needs.build.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The approval gate: the job waits here until a required reviewer approves it.
+    environment:
+      name: production
+      url: https://api.denisgulev.com/api/status
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Deploy to EC2 via SSM
+        uses: ./.github/actions/ssm-run
+        with:
+          script-path: scripts/deploy-app.sh
+          timeout-seconds: '300'
+          env: |
+            IMAGE=${{ secrets.DOCKER_USERNAME }}/go-app:${{ needs.verify.outputs.tag }}
+            TAG=${{ needs.verify.outputs.tag }}
+            REGION=${{ secrets.AWS_REGION }}
+
+      - name: Verify the public API reports the new version
+        env:
+          URL: https://api.denisgulev.com/api/status
+          EXPECT_VERSION: ${{ needs.verify.outputs.tag }}
+        run: bash scripts/verify-deployment.sh

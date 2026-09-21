@@ -4,18 +4,23 @@ name: CI
 # always report, otherwise a required check would stay "pending" forever on
 # PRs whose files did not match a filter. Branch protection should require
 # only `CI gate`.
+#
+# Also reused by release.yml (`workflow_call`), so a release cannot be built
+# from a commit that does not pass the same checks as a PR.
 on:
   pull_request:
     branches:
       - main
+  workflow_call:
 
 permissions:
   contents: read
 
-# A newer push to the same PR makes the older run obsolete.
+# A newer push to the same PR makes the older run obsolete. Runs called from a
+# release are never cancelled.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Tool versions are pinned; Dependabot does not track these, bump by hand.
@@ -82,14 +87,8 @@ jobs:
           go install "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
           "$(go env GOPATH)/bin/actionlint" -color
 
-      # No scripts/ directory yet; this starts checking them as soon as one exists.
       - name: Lint shell scripts (shellcheck)
-        run: |
-          if compgen -G "scripts/*.sh" > /dev/null; then
-            shellcheck scripts/*.sh
-          else
-            echo "no scripts/*.sh yet, skipping"
-          fi
+        run: shellcheck scripts/*.sh
 
       - name: Lint Dockerfile (hadolint)
         run: |
@@ -99,11 +98,11 @@ jobs:
           chmod +x "$RUNNER_TEMP/hadolint"
           "$RUNNER_TEMP/hadolint" backend/app/Dockerfile
 
-  # Reports known vulnerabilities but is NOT part of `CI gate` yet: it currently
-  # fails (Go stdlib in go1.26.4 and the AWS CloudWatch Logs SDK need bumping).
-  # Once those are fixed, add it to `needs:` of the gate to make it blocking.
+  # Fails on known vulnerabilities in the Go standard library or dependencies.
+  # A new advisory can therefore turn this red without any code change: fix it by
+  # bumping the Go version in go.mod (and the Dockerfile) or the affected module.
   govulncheck:
-    name: Vulnerability scan (govulncheck, advisory)
+    name: Vulnerability scan (govulncheck)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -124,12 +123,42 @@ jobs:
           go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
           "$(go env GOPATH)/bin/govulncheck" ./...
 
+  # Builds the image from the same Dockerfile as the release and starts it, so a
+  # broken Dockerfile, a missing health check or a root user is caught on the PR
+  # instead of on release day. It is built for the runner's own architecture
+  # (amd64); the release build only differs in the target architecture.
+  image:
+    name: Image (build and smoke test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: backend/app
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: go-app:ci
+          cache-from: type=gha,scope=image-ci
+          # PRs from Dependabot/forks cannot write the cache; that must not fail the build.
+          cache-to: type=gha,mode=max,scope=image-ci,ignore-error=true
+
+      - name: Smoke test the image
+        run: bash scripts/smoke-test-image.sh
+
   # The single required check. `if: always()` makes it run (and fail) even when a
   # needed job failed or was cancelled, instead of being skipped.
   gate:
     name: CI gate
     if: always()
-    needs: [go, lint]
+    needs: [go, lint, govulncheck, image]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
