@@ -1,0 +1,30 @@
+name: Terraform backend
+
+# PR: checks + plan. Merge to main: checks + plan + (approved) apply.
+# The apply trigger deliberately does NOT include the workflow files, so editing
+# a workflow never applies infrastructure.
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/infra/**'
+      - '.github/workflows/terraform-backend.yml'
+      - '.github/workflows/_terraform.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/infra/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: backend/infra
+    secrets:
+      TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}

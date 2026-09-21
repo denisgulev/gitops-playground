@@ -132,9 +132,9 @@ Managed via Terraform (workspace: `Backend`). See [backend/infra/README.md](back
 ### Deployment Workflow
 
 1. Develop on a feature branch
-2. Open a PR targeting `main` → **Terraform Plan** runs automatically
-3. Add label `ready-for-tf-apply` → **Terraform Apply** runs (job-level guard)
-4. Merge PR
+2. Open a PR targeting `main` → `terraform-backend.yml` runs checks (fmt, validate, tflint) and a plan; the plan is shown in the run's job summary
+3. Review the plan and merge the PR
+4. On `main` the workflow plans again and the **Apply** job waits for approval (GitHub Environment `infrastructure`); approve it after reading that plan, and it applies
 
 For application deployments (Docker image updates), everything is driven by `release.yml`:
 
@@ -180,9 +180,9 @@ Managed via Terraform (workspace: `Frontend`). See [frontend/infra/README.md](fr
 ### Deployment Workflow
 
 **Infrastructure:**
-1. Open a PR with changes to `frontend/infra/` → **Terraform Plan** runs
-2. Add `ready-for-tf-apply` label → **Terraform Apply** runs
-3. Merge PR
+1. Open a PR with changes to `frontend/infra/` → `terraform-frontend.yml` runs checks (fmt, validate, tflint) and a plan (in the job summary)
+2. Review the plan and merge the PR
+3. On `main` the workflow plans again and the **Apply** job waits for approval (Environment `infrastructure`), then applies
 
 **Static files:**
 - Push to `main` with changes in `frontend/static/` → `static-deploy.yml` syncs `dist/` to S3 and invalidates CloudFront cache
@@ -210,10 +210,9 @@ Grafana is accessible only via the EC2 instance's IP — it is not exposed publi
 
 | Workflow | Trigger | Action |
 |---|---|---|
-| `terraform-plan.yml` | PR to `main` touching `frontend/infra/**` | Terraform fmt, validate, plan |
-| `terraform-apply.yml` | PR labeled `ready-for-tf-apply` + targets `main` | Terraform apply |
-| `terraform-plan-backend.yml` | PR to `main` touching `backend/infra/**` | Terraform fmt, validate, plan |
-| `terraform-apply-backend.yml` | PR labeled `ready-for-tf-apply` + targets `main` | Terraform apply |
+| `terraform-frontend.yml` | PR touching `frontend/infra/**`; push to `main` touching it; manual | Calls `_terraform.yml`: checks (fmt, validate, tflint) + plan; on `main` also apply after approval |
+| `terraform-backend.yml` | PR touching `backend/infra/**`; push to `main` touching it; manual | Same, for `backend/infra` |
+| `_terraform.yml` | Called by the two workflows above | Shared logic: pinned Terraform, plan summary, approval-gated apply |
 | `ci.yml` | PR to `main` (and called by `release.yml`) | gofmt, vet, tests, actionlint, shellcheck, hadolint, govulncheck, image build + smoke test; single required check `CI gate` |
 | `release.yml` | Push of tag `vX.Y.Z`, or manual run with a tag | Verify tag → CI → build & push image → approval → deploy via SSM (canary) → verify public API version |
 | `static-deploy.yml` | Push to `main` touching `frontend/static/**` | S3 sync + CloudFront invalidation |
@@ -430,7 +429,7 @@ To streamline frontend deployments, we implemented a GitHub Actions workflow tha
 
 #### Infrastructure
 
-The process begins when a pull request (PR) is created with changes to the **frontend/infra/** directory. Upon PR creation, a Terraform Plan is automatically executed, evaluating the infrastructure changes without applying them. A reviewer can then add a **ready-for-tf-apply** label to the PR, which triggers the Terraform Apply workflow to apply the approved changes. 
+The process begins when a pull request (PR) is created with changes to the **frontend/infra/** directory. Upon PR creation, the checks (format, validate, tflint) and a Terraform Plan are automatically executed, evaluating the infrastructure changes without applying them; the plan is shown in the run's job summary. After the PR is merged, the workflow plans again on `main` and the Apply job waits until a reviewer approves the `infrastructure` Environment, so the reviewer sees the plan that is about to be applied.
 
 #### Static Files
 
@@ -439,16 +438,17 @@ Static files (HTML, CSS, JS) are automatically deployed to an S3 bucket when com
 ### Automate infrastructure changes via GitHub Actions
 
 The process is similar to the one for the frontend flow.
-When a pull request (PR) is created with changes to the **backend/infra/** directory. Upon PR creation, a Terraform Plan (Backend) is automatically executed, evaluating the infrastructure changes without applying them. A reviewer can then add a **ready-for-tf-apply** label to the PR, which triggers the Terraform Apply (Backend) workflow to apply the approved changes. 
+When a pull request (PR) is created with changes to the **backend/infra/** directory, `terraform-backend.yml` automatically runs the checks and a Terraform Plan, without applying anything. After the merge, the Apply job runs on `main` once a reviewer approves the `infrastructure` Environment.
 
 #### *Notes on how deployments works*
 
 Developers begin by working on changes in a dedicated feature branch. Once the work is complete, they open a pull request targeting the main branch. This initiates a structured deployment process:
-1.	A Terraform Plan action is triggered automatically to preview infrastructure changes (handled separately for frontend and backend).
-2.	If the plan succeeds and the proposed changes look good, a reviewer can apply the ready-for-tf-apply label to the PR.
-3.	Adding this label triggers the corresponding Terraform Apply workflow to apply the infrastructure changes.
-4.	If the plan reveals issues or requires improvements, the reviewer can leave feedback as a comment instead of applying the label.
-5.	Once Terraform Apply completes successfully, the pull request is ready to be merged into the main branch.
+1.	The checks (fmt, validate, tflint) and a Terraform Plan run automatically to preview infrastructure changes (handled separately for frontend and backend). The plan appears in the job summary of the run.
+2.	If the checks fail or the plan reveals issues or requires improvements, the reviewer leaves feedback on the PR and the author pushes changes.
+3.	If everything looks good, the PR is merged into the main branch.
+4.	On `main` the workflow plans again and the Apply job waits for approval on the `infrastructure` Environment. Approving it applies the changes; a failed apply leaves `main` as merged, so fix forward with a new PR.
+
+**One-time setup:** create the `infrastructure` Environment with a required reviewer *before* the first infra change is merged. GitHub silently creates a missing environment without protection rules, which would skip the approval.
 
 ## Frontend Setup
 
@@ -518,7 +518,7 @@ The Flask backend exposes a single API endpoint as an example of a backend servi
 
     - I’ve split the infrastructure from the backend service (Flask app):
 
-      1. The infrastructure code lives in the *backend/infra/* folder. Any PRs to the *main* branch that touch files in this folder will trigger the *terraform-plan-backend.yml* workflow. This kicks off a *terraform plan* process, and if that goes well, you can run *terraform apply* by adding the *ready-for-tf-apply* label to the PR.
+      1. The infrastructure code lives in the *backend/infra/* folder. Any PRs to the *main* branch that touch files in this folder will trigger the *terraform-backend.yml* workflow. This runs the checks and a *terraform plan*; after the merge, the *terraform apply* runs on *main* once a reviewer approves it.
 
       2. The backend service runs in Docker. Whenever a version tag is pushed, the *release.yml* workflow runs the checks, builds a Docker image from the tagged commit and pushes it to Docker Hub, then deploys it after approval.
 
