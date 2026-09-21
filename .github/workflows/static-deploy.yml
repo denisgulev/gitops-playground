@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'frontend/static/**'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,10 +20,28 @@ jobs:
     concurrency:
       group: deploy-static
       cancel-in-progress: false
-    defaults:
-      run:
-        working-directory: frontend/static
+    env:
+      # Repository variables win; the secrets are only a fallback so the switch to
+      # variables can happen without breaking deploys (set the variables, then
+      # delete the secrets BUCKET_NAME, DISTRIBUTION_ID and AWS_REGION).
+      AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION || 'eu-south-1' }}
+      S3_BUCKET: ${{ vars.S3_BUCKET || secrets.BUCKET_NAME }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID || secrets.DISTRIBUTION_ID }}
+      # The file names are not fingerprinted, so nothing may be cached for long: a
+      # page that changes must reach visitors within minutes, other files within a day.
+      # Used by both the upload and the verification step.
+      HTML_CACHE_CONTROL: public, max-age=300
+      OTHER_CACHE_CONTROL: public, max-age=86400
     steps:
+      - name: Check configuration
+        run: |
+          for name in S3_BUCKET CLOUDFRONT_DISTRIBUTION_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is empty. Set the repository variable $name (or, as a fallback, the secret BUCKET_NAME / DISTRIBUTION_ID)."
+              exit 1
+            fi
+          done
+
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -31,17 +50,24 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-south-1
+          aws-region: ${{ env.AWS_REGION }}
 
+      # Two passes so each kind of file gets its own Cache-Control. `--delete` in
+      # each pass only removes objects that match that pass's filters.
       - name: Sync to S3
-        env:
-          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
-        run: aws s3 sync ./dist/ "s3://${BUCKET_NAME}" --delete
+        run: |
+          aws s3 sync frontend/static/dist/ "s3://${S3_BUCKET}" --delete \
+            --exclude "*.html" --cache-control "$OTHER_CACHE_CONTROL"
+          aws s3 sync frontend/static/dist/ "s3://${S3_BUCKET}" --delete \
+            --exclude "*" --include "*.html" --cache-control "$HTML_CACHE_CONTROL"
 
       - name: Invalidate CloudFront Cache
-        env:
-          DISTRIBUTION_ID: ${{ secrets.DISTRIBUTION_ID }}
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id "$DISTRIBUTION_ID" \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
             --paths "/*"
+
+      # Fails if an object is missing, has the wrong Cache-Control, or if the
+      # bucket holds something that is not in dist/.
+      - name: Verify what was uploaded
+        run: bash scripts/verify-static-headers.sh
