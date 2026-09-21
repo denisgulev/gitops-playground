@@ -20,3 +20,11 @@ flask-key.pem
 .idea
 
 .DS_Store
+
+# Local Go build artifacts (e.g. `go build ./...` output in backend/app/)
+backend/app/backend
+backend/app/app
+
+PLAN.md
+
+PLAN-GITHUB.md
