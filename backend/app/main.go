@@ -184,33 +184,11 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
     _ = json.NewEncoder(w).Encode(v)
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Router ────────────────────────────────────────────────────────────────────
 
-func main() {
-    ctx := context.Background()
-
-    awsRegion  := envOr("AWS_REGION", "eu-south-1")
-    logGroup   := envOr("CLOUDWATCH_LOG_GROUP", "go-app-logs")
-    staticURL  := envOr("STATIC_SITE_URL", "https://static-website.example.com")
-    appVersion := envOr("APP_VERSION", "unknown")
-
-    // Base logger (stdout — captured by Docker, shipped by Promtail)
-    baseHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
-    var handler slog.Handler = baseHandler
-
-    // Wrap with CloudWatch handler if available
-    cwh, err := newCWHandler(ctx, awsRegion, logGroup, baseHandler)
-    if err != nil {
-        slog.New(baseHandler).Warn("could not initialize CloudWatch handler", "error", err)
-    } else {
-        handler = cwh
-    }
-
-    logger := slog.New(handler)
-    logger.Info("logging to stdout + CloudWatch is active")
-
-    store := newRateLimiterStore()
-
+// newRouter builds the HTTP handler tree. Split out from main so it can be
+// exercised directly in tests without booting CloudWatch/logging/listening.
+func newRouter(logger *slog.Logger, store *rateLimiterStore, awsRegion, staticURL, appVersion string) http.Handler {
     r := chi.NewRouter()
     r.Use(middleware.Recoverer)
     r.Use(requestLogger(logger))
@@ -256,6 +234,64 @@ func main() {
         logger.Warn("404", "path", r.URL.Path)
         http.Redirect(w, r, staticURL+"/error.html", http.StatusFound)
     })
+
+    return r
+}
+
+// ── Healthcheck ───────────────────────────────────────────────────────────────
+
+// runHealthcheck is invoked as `/app -healthcheck` by the Docker HEALTHCHECK
+// instruction. It queries the running server's own /api/status endpoint and
+// exits 0/1 accordingly, instead of trying to boot a second server instance
+// (which would fail with "address already in use" and always report unhealthy).
+func runHealthcheck() {
+    client := http.Client{Timeout: 3 * time.Second}
+    resp, err := client.Get("http://localhost:8000/api/status")
+    if err != nil {
+        fmt.Fprintln(os.Stderr, "healthcheck request failed:", err)
+        os.Exit(1)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {
+        fmt.Fprintln(os.Stderr, "healthcheck failed: status", resp.StatusCode)
+        os.Exit(1)
+    }
+    os.Exit(0)
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
+func main() {
+    if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
+        runHealthcheck()
+        return
+    }
+
+    ctx := context.Background()
+
+    awsRegion  := envOr("AWS_REGION", "eu-south-1")
+    logGroup   := envOr("CLOUDWATCH_LOG_GROUP", "go-app-logs")
+    staticURL  := envOr("STATIC_SITE_URL", "https://static-website.example.com")
+    appVersion := envOr("APP_VERSION", "unknown")
+
+    // Base logger (stdout — captured by Docker, shipped by Promtail)
+    baseHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
+    var handler slog.Handler = baseHandler
+
+    // Wrap with CloudWatch handler if available
+    cwh, err := newCWHandler(ctx, awsRegion, logGroup, baseHandler)
+    if err != nil {
+        slog.New(baseHandler).Warn("could not initialize CloudWatch handler", "error", err)
+    } else {
+        handler = cwh
+    }
+
+    logger := slog.New(handler)
+    logger.Info("logging to stdout + CloudWatch is active")
+
+    store := newRateLimiterStore()
+    r := newRouter(logger, store, awsRegion, staticURL, appVersion)
 
     logger.Info("starting Go app", "port", 8000)
     if err := http.ListenAndServe(":8000", r); err != nil {
