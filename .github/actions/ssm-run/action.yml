@@ -1,0 +1,48 @@
+name: Run script on EC2 via SSM
+description: >
+  Sends a script from this repository to the EC2 instance with SSM Run Command,
+  waits for it to finish, prints its output and fails unless it succeeded.
+  The caller must check out the repository first and provide AWS credentials
+  and a region as environment variables.
+
+inputs:
+  script-path:
+    description: Script in the repository to run on the instance (must start with a shebang).
+    required: true
+  env:
+    description: >
+      KEY=VALUE lines exported before the script runs, one per line.
+      Values are stored in the SSM command history, so do not pass secrets.
+    required: false
+    default: ""
+  instance-id-parameter:
+    description: SSM parameter that holds the instance id.
+    required: false
+    default: /infra/ec2/instance_id
+  timeout-seconds:
+    description: Seconds the script may run (minimum 30).
+    required: false
+    default: "300"
+  poll-interval-seconds:
+    description: Seconds between status checks.
+    required: false
+    default: "5"
+
+outputs:
+  command-id:
+    description: The SSM command id.
+    value: ${{ steps.run.outputs.command-id }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        SSM_SCRIPT_PATH: ${{ inputs.script-path }}
+        SSM_ENV: ${{ inputs.env }}
+        SSM_INSTANCE_PARAM: ${{ inputs.instance-id-parameter }}
+        SSM_TIMEOUT: ${{ inputs.timeout-seconds }}
+        SSM_POLL_INTERVAL: ${{ inputs.poll-interval-seconds }}
+      # The logic lives in scripts/ssm-run.sh so it can be tested and shellchecked.
+      run: bash "$GITHUB_WORKSPACE/scripts/ssm-run.sh"
