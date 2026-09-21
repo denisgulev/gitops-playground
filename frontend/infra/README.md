@@ -21,10 +21,9 @@ Ensures the bucket is NOT publicly accessible.
 Depends on `aws_s3_bucket_ownership_controls` and `aws_s3_bucket_public_access_block`.
 Enforces the access level for the bucket to "private."
 
-#### aws_s3_object
+#### Static files (not managed here)
 
-Ensures to deploy all static files from our `dist_dir`.
-
+The files in `frontend/static/dist/` are uploaded by `.github/workflows/static-deploy.yml` (`aws s3 sync`, with `Cache-Control` headers), not by Terraform. Terraform used to manage them with `aws_s3_object`, which made the two fight over the same objects. `removed.tf` makes Terraform forget them without deleting them (`destroy = false`); once it has been applied it can be deleted.
 
 ## ACM
 
