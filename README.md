@@ -1,6 +1,12 @@
 # GitOps Playground
 
-A production-ready boilerplate for deploying a Flask backend API and a static frontend on AWS, fully automated with Terraform and GitHub Actions.
+A boilerplate for running a **Go API** and a **static frontend** on AWS, with all infrastructure in Terraform and every change to it, to the app and to the site going through GitHub Actions. Deployments need no SSH: they run through AWS Systems Manager (SSM), behind approvals.
+
+- [Overview](#overview) · [Architecture](#architecture) · [Repository structure](#repository-structure)
+- [Getting started](#getting-started)
+- [Backend](#backend) · [Frontend](#frontend) · [Observability](#observability-stack)
+- [CI/CD](#cicd) · [Repository protections](#repository-protections-and-configuration) · [Runbook](#runbook)
+- [Security](#security) · [Known limitations and roadmap](#known-limitations-and-roadmap) · [What changed](#what-changed-in-the-cicd-hardening)
 
 ---
 
@@ -8,12 +14,13 @@ A production-ready boilerplate for deploying a Flask backend API and a static fr
 
 | Layer | Technology |
 |---|---|
-| Frontend | Static HTML/JS hosted on S3, served via CloudFront |
-| Backend | Flask + Gunicorn in Docker on EC2, behind Nginx |
-| Infrastructure | Terraform (Terraform Cloud, two workspaces) |
-| DNS | Route 53 (ACM-issued TLS cert) |
-| CI/CD | GitHub Actions |
-| Observability | Grafana · Loki · Promtail · Tempo · Mimir |
+| Frontend | Static HTML/JS on S3 (private bucket), served through CloudFront |
+| Backend | Go API (chi) in a Docker container on one EC2 instance, behind Nginx |
+| Infrastructure | Terraform on HCP Terraform (Terraform Cloud): workspaces `Backend` and `Frontend` |
+| DNS / TLS | Route 53, ACM certificate (issued in `us-east-1`, DNS-validated) |
+| CI/CD | GitHub Actions: CI, release, Terraform, static deploy, observability deploy |
+| Deployment channel | SSM Run Command (no SSH, no inbound port needed) |
+| Observability | Grafana, Loki, Promtail on the same instance (Tempo, Mimir and Prometheus are present but disabled) |
 
 ---
 
@@ -27,579 +34,458 @@ A production-ready boilerplate for deploying a Flask backend API and a static fr
                          │  /api/*      ──────────►  EC2 Origin    │
                          └──────────┬────────────────────┬─────────┘
                                     │                    │
-                           static-website.          api.domain.com
-                               domain.com
+                       static-website.<domain>     api.<domain>
                                     │                    │
-                              ┌─────▼─────┐       ┌─────▼──────┐
-                              │ S3 Bucket │       │ EC2 (Nginx) │
-                              │  (private)│       │  → Gunicorn │
-                              └───────────┘       │  → Flask    │
-                                                  └────────────┘
+                              ┌─────▼─────┐       ┌──────▼──────┐
+                              │ S3 Bucket │       │ EC2 · Nginx │
+                              │ (private, │       │  → Go API   │
+                              │   OAC)    │       │  (Docker)   │
+                              └───────────┘       └─────────────┘
 ```
 
-Both domains (`static-website.domain.com` and `api.domain.com`) point to the **same CloudFront distribution**. CloudFront uses path-based routing to forward `/api/*` requests to the EC2 origin and everything else to S3.
+Three names (`static-website.<domain>`, `www.static-website.<domain>`, `api.<domain>`) point at the **same CloudFront distribution**. CloudFront routes by path: `/api/*` goes to the EC2 origin, everything else to S3. A CloudFront Function redirects `www.` to the bare name.
+
+### CloudFront routing
+
+| Path pattern | Origin | Cache policy |
+|---|---|---|
+| `/api/*` | EC2 (Nginx → Go API), HTTP on port 80 | Custom: default TTL 0, max TTL 10 s, forwards `Origin` and the CORS request headers |
+| `/*` (default) | S3 bucket via Origin Access Control | Managed *CachingOptimized* |
+
+![Static web hosting](./assets/static-web-hosting.png)
 
 ---
 
-## Repository Structure
+## Repository structure
 
 ```
 .
+├── .github/
+│   ├── actions/ssm-run/        # composite action: run a script on the EC2 instance via SSM
+│   ├── workflows/              # ci, release, terraform-*, _terraform, static-deploy, deploy-grafana
+│   └── dependabot.yml          # weekly updates: GitHub Actions, Go modules, Docker
 ├── backend/
-│   ├── app/                    # Go API (Docker image)
-│   │   ├── main.go
-│   │   ├── main_test.go
-│   │   ├── Dockerfile
-│   │   └── go.mod / go.sum
-│   └── infra/                  # Terraform — EC2, VPC, IAM, EIP, SSM
+│   ├── app/                    # Go API: main.go, tests, Dockerfile
+│   └── infra/                  # Terraform (workspace Backend): VPC, EC2, EIP, IAM, SSM
 ├── frontend/
-│   ├── static/dist/            # Static HTML/JS deployed to S3
-│   └── infra/                  # Terraform — S3, CloudFront, ACM, Route 53
-├── observability-stack/        # Docker Compose — Grafana, Loki, Promtail, Tempo, Mimir
-├── bin/                        # Helper scripts (S3 bucket creation)
-└── .github/workflows/          # GitHub Actions CI/CD pipelines
+│   ├── static/dist/            # the site that is deployed (index.html, error.html)
+│   └── infra/                  # Terraform (workspace Frontend): CloudFront, ACM, Route 53, bucket config
+├── observability-stack/        # Docker Compose: Grafana, Loki, Promtail (+ disabled Tempo/Mimir/Prometheus)
+├── scripts/                    # the logic behind the workflows (shellcheck-ed, testable)
+├── bin/create-s3-bucket        # helper that creates the site bucket
+└── assets/                     # diagrams
 ```
 
 ---
 
-## Prerequisites
+## Getting started
 
-- AWS account with sufficient IAM permissions
-- Terraform Cloud account (organization + two workspaces: `Backend`, `Frontend`)
-- Docker Hub account
-- A registered domain with a Route 53 hosted zone
-- GitHub repository secrets configured (see [CI/CD](#cicd) section)
+### Prerequisites
+
+- An AWS account and a domain with a **Route 53 hosted zone**
+- An HCP Terraform (Terraform Cloud) organization with two **CLI-driven** workspaces, `Backend` and `Frontend`. The AWS credentials and the Terraform variables (`terraform.tfvars.example` in each `infra/` directory lists them) live in the workspaces. Set each workspace's *Terraform Working Directory* to `backend/infra` / `frontend/infra`.
+- A Docker Hub account (the release workflow pushes the image there)
+- The site bucket must **exist** before Terraform runs: `bin/create-s3-bucket` creates one, and its name goes into the `bucket_name` variable
+- Change the organization name `Terraform-bootcamp-aws` (hardcoded in `backend/infra/main.tf` and `frontend/infra/backend.tf`) to yours
+
+### One-time setup
+
+1. **Apply the infrastructure, backend first.** The frontend reads the EC2 address that the backend publishes in SSM (`/infra/ec2/public_dns`). Run it through the pipeline described in [Terraform](#terraform), or the first time with `terraform apply` from each directory.
+2. **Configure GitHub** ([details](#repository-protections-and-configuration)): repository secrets and variables, the two Environments (`production`, `infrastructure`), the rulesets. Create the environments **before** the first release or infra change, because GitHub silently creates a missing environment *without* protection, which would skip the approval.
+3. **Cut the first release** ([runbook](#runbook)): push a tag such as `v0.1.0`.
 
 ---
 
 ## Backend
 
-### Flask Application (`backend/app/`)
+### The Go API (`backend/app/`)
 
-The API is a Python Flask app served by Gunicorn. It runs as a non-root Docker container on EC2.
-
-**Endpoints:**
+A small [chi](https://github.com/go-chi/chi) service listening on port 8000.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/hello` | Returns a greeting |
-| GET | `/api/info` | Returns service info |
-| GET | `/api/status` | Health check endpoint |
+| GET | `/api/hello` | Greeting |
+| GET | `/api/info` | Service info |
+| GET | `/api/status` | Health: `{status, version, region, static_site}`. Used by the Docker health check, the deploy canary and the post-deploy check |
+| GET | `/api/about` | Project description and stack |
+| any other | | `302` to `${STATIC_SITE_URL}/error.html` |
 
-**Logging:**
-- Structured logs are written to `/var/log/flask/app.log` (picked up by Promtail) and to CloudWatch Logs via `watchtower`. Both handlers fail gracefully — the app continues running if either destination is unavailable.
-
-**Tracing:**
-- OpenTelemetry traces are exported to a Tempo endpoint. The endpoint defaults to `http://tempo:4318/v1/traces` and can be overridden via the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable.
-
-**Environment variables:**
+**Configuration (environment variables):**
 
 | Variable | Default | Description |
 |---|---|---|
-| `AWS_DEFAULT_REGION` | `eu-south-1` | AWS region for CloudWatch |
-| `CLOUDWATCH_LOG_GROUP` | `flask-app-logs` | CloudWatch log group name |
-| `STATIC_SITE_URL` | `https://static-website.example.com` | Used for 404 redirects |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://tempo:4318/v1/traces` | Tempo trace exporter endpoint |
+| `AWS_REGION` | `eu-south-1` | Region for the CloudWatch client. The deploy script sets `AWS_DEFAULT_REGION`, not this, so production uses the default |
+| `CLOUDWATCH_LOG_GROUP` | `go-app-logs` | CloudWatch log group (created by the app if missing) |
+| `STATIC_SITE_URL` | `https://static-website.example.com` | Target of the 404 redirect; also reported by `/api/status` |
+| `APP_VERSION` | `unknown` | Reported by `/api/status`; the deploy sets it to the release tag |
 
-### Docker (`backend/app/Dockerfile`)
+**Logging.** JSON logs (`log/slog`) go to stdout, where Docker keeps them and Promtail ships them to Loki. A second copy goes to CloudWatch Logs; that copy carries the level and message only, not the structured attributes. Failing to reach CloudWatch does not stop the app.
 
-- Base image: `python:3.11-slim`
-- Non-root user (`appuser:appgroup`) for runtime security
-- Dependencies installed from pinned `requirements.txt`
-- Health check: `GET /api/status`
-- Entrypoint: `gunicorn --workers 3 --bind 0.0.0.0:8000 app:app`
+**Rate limiting.** An in-memory limiter allows 50 requests per hour and 200 per day per key, and answers `429`. See the [limitations](#known-limitations-and-roadmap): the key is the connection's remote address, which behind CloudFront and Nginx is probably not the visitor's address.
 
-### EC2 Infrastructure (`backend/infra/`)
+**Health check.** `/app -healthcheck` requests `http://localhost:8000/api/status` and exits 0 or 1. It is the image's `HEALTHCHECK`.
 
-Managed via Terraform (workspace: `Backend`). See [backend/infra/README.md](backend/infra/README.md) for full resource documentation.
+**Local development**
 
-**Key resources:**
-- EC2 instance (Amazon Linux 2023, ARM) bootstrapped via `user_data.sh`
-- Elastic IP — stable public address across instance replacements
-- Nginx — reverse proxy on port 80 forwarding to Gunicorn on port 8000; handles CORS preflight
-- Security groups — HTTP/HTTPS ingress restricted to the CloudFront managed prefix list; SSH restricted via `ssh_allowed_cidr`
-- SSM Parameter — EIP DNS stored at `/infra/ec2/public_dns` for cross-workspace consumption
+```bash
+cd backend/app
+go test ./... -race
+AWS_EC2_METADATA_DISABLED=true go run .    # then: curl localhost:8000/api/status
+```
 
-**Terraform variables:**
+`AWS_EC2_METADATA_DISABLED` stops the CloudWatch client from waiting on the EC2 metadata service; without credentials the app still runs and logs to stdout only.
 
-| Variable | Description |
+### The Docker image (`backend/app/Dockerfile`)
+
+- **Multi-stage.** The build stage runs on the build machine and Go **cross-compiles** for the target (`GOOS`/`GOARCH` from `TARGETOS`/`TARGETARCH`), so an arm64 image is produced on an amd64 runner without emulation. The final stage is `FROM scratch` with only the binary and the CA certificates.
+- **Non-root.** Runs as `65532:65532`.
+- **Target.** `linux/arm64` (the EC2 instance is ARM). The CI builds the same Dockerfile for amd64 and starts it as a smoke test.
+- **Do not give `ARG TARGETARCH` a default value** in the Dockerfile: the default overrides what BuildKit passes in, and an amd64 build silently gets an arm64 binary.
+
+### EC2 infrastructure (`backend/infra/`)
+
+Managed in the `Backend` workspace; per-resource notes are in [backend/infra/README.md](backend/infra/README.md).
+
+- **Network:** dedicated VPC `10.0.0.0/16`, two public and two private subnets (the private ones are unused), internet gateway, route table
+- **Instance:** Amazon Linux 2023 ARM, bootstrapped by `user_data.sh`, with an **Elastic IP**
+- **Nginx** on port 80 proxies to the container on port 8000 and handles CORS (see [Design notes](#design-notes)). Only `GET`, `POST` and `OPTIONS` are allowed; `HEAD` gets a 405.
+- **Security groups:** HTTP and HTTPS ingress only from the **CloudFront managed prefix list** (looked up with a data source); SSH from `ssh_allowed_cidr`
+- **IAM:** an instance role with CloudWatch Logs write access and `AmazonSSMManagedInstanceCore` (what makes SSM deployments possible)
+- **SSM parameters:** `/infra/ec2/public_dns` (read by the frontend workspace) and `/infra/ec2/instance_id` (read by the deploy workflows)
+
+| Terraform variable | Description |
 |---|---|
 | `aws_region` | Deployment region |
-| `instance_type` | EC2 instance type |
-| `domain_name` | Base domain (e.g. `example.com`) |
-| `ssh_allowed_cidr` | CIDR block allowed to SSH (restrict in production) |
+| `instance_type` | EC2 instance type (ARM) |
+| `domain_name` | Base domain, e.g. `example.com`; the API is served at `api.<domain>` |
+| `ssh_allowed_cidr` | CIDR allowed to SSH; set it to your own address |
+| `subdomain`, `hosted_zone_id` | Declared but currently **unused** |
 
-### Deployment Workflow
+> **Changing `user_data.sh` replaces the instance** (`user_data_replace_on_change`). The new instance has no app container and no observability stack until the deploy workflows run again.
 
-1. Develop on a feature branch
-2. Open a PR targeting `main` → `terraform-backend.yml` runs checks (fmt, validate, tflint) and a plan; the plan is shown in the run's job summary
-3. Review the plan and merge the PR
-4. On `main` the workflow plans again and the **Apply** job waits for approval (GitHub Environment `infrastructure`); approve it after reading that plan, and it applies
+![Backend network](./assets/backend.png)
 
-For application deployments (Docker image updates), everything is driven by `release.yml`:
-
-1. Merge to `main`, then push a version tag on a commit that is on `main` (e.g. `git tag v1.2.0 && git push origin v1.2.0`)
-2. The workflow verifies the tag, runs the same checks as a PR (`ci.yml`), builds the image from the tagged commit and pushes it to Docker Hub
-3. The **deploy** job then waits for approval (GitHub Environment `production`, required reviewer)
-4. After approval it runs the deploy script on EC2 through SSM (canary container, health check, promote; the running container is untouched if the canary fails) and finally checks that the public API reports the new version
-
-**Rollback / redeploy:** Actions → *Release* → *Run workflow* → enter an existing tag (e.g. `v1.1.0`). The image is not rebuilt; the same approval and post-deploy check apply.
-
-**One-time setup:** create the `production` Environment with a required reviewer *before* the first release. GitHub silently creates a missing environment without protection rules, which would skip the approval.
+*The network layout. The diagram predates two changes: the instance is named `FlaskAppEC2` in Terraform for historical reasons, and HTTP/HTTPS ingress is no longer open to `0.0.0.0/0` but limited to the CloudFront prefix list.*
 
 ---
 
 ## Frontend
 
-### Static Site (`frontend/static/dist/`)
+### The site (`frontend/static/dist/`)
 
-Plain HTML/JS. The JavaScript calls `https://api.domain.com/api/hello` to demonstrate frontend–backend connectivity.
+Two plain HTML files, `index.html` and `error.html`. The page calls the API at `https://api.<domain>/api/...`. The address is the `API_BASE` constant in `index.html`, currently set to the author's domain, so change it for yours.
 
 ### Infrastructure (`frontend/infra/`)
 
-Managed via Terraform (workspace: `Frontend`). See [frontend/infra/README.md](frontend/infra/README.md) for full resource documentation.
-
-**Key resources:**
+Managed in the `Frontend` workspace; notes per resource in [frontend/infra/README.md](frontend/infra/README.md).
 
 | Resource | Purpose |
 |---|---|
-| S3 bucket (private) | Stores static files |
-| CloudFront distribution | CDN with two origins (S3 + EC2), TLS enforced |
-| ACM certificate | TLS cert for the domain, validated via DNS |
-| Route 53 records | A records for `static-website.domain.com` and `api.domain.com` → CloudFront |
-| CloudFront Function | Strips `www.` prefix from requests |
-| SSM data source | Reads EC2 EIP DNS from `/infra/ec2/public_dns` (written by backend Terraform) |
+| S3 bucket (existing, private) | Site files. Website configuration, ownership controls, public-access block, private ACL and a bucket policy that only lets the CloudFront distribution read it (OAC) |
+| CloudFront distribution | Two origins (S3 and EC2), TLS 1.2+ only, redirect to HTTPS, HTTP/2 and HTTP/3 |
+| ACM certificate | For the site names and the API name, DNS-validated, created in `us-east-1` |
+| Route 53 records | A records for the site and the API, CNAME for `www` |
+| CloudFront Function | Redirects `www.` to the bare name |
+| SSM data source | EC2 address from `/infra/ec2/public_dns` |
 
-**CloudFront routing:**
+**Who owns the site files.** The **`static-deploy.yml` workflow** uploads `dist/`, not Terraform. Terraform used to manage the objects too, and the two fought over them; `frontend/infra/removed.tf` makes Terraform forget them without deleting them, and can be removed once applied.
 
-| Path pattern | Origin | Cache policy |
-|---|---|---|
-| `/api/*` | EC2 (Nginx/Gunicorn) | Custom — 0 TTL, CORS headers forwarded |
-| `/*` (default) | S3 bucket | Managed CachingOptimized |
-
-### Deployment Workflow
-
-**Infrastructure:**
-1. Open a PR with changes to `frontend/infra/` → `terraform-frontend.yml` runs checks (fmt, validate, tflint) and a plan (in the job summary)
-2. Review the plan and merge the PR
-3. On `main` the workflow plans again and the **Apply** job waits for approval (Environment `infrastructure`), then applies
-
-**Static files:**
-- Push to `main` with changes in `frontend/static/` (or run the workflow manually) → `static-deploy.yml` syncs `dist/` to S3 with a `Cache-Control` header (HTML: 5 minutes, everything else: 1 day; file names are not fingerprinted), invalidates the CloudFront cache, and verifies that the bucket matches `dist/` with the intended headers
+**Cache headers.** HTML gets `Cache-Control: public, max-age=300` and everything else `max-age=86400`. The file names are not fingerprinted, so nothing is cached for long.
 
 ---
 
-## Observability Stack
+## Observability stack
 
-Deployed to the same EC2 instance via Docker Compose. Managed by `deploy-grafana.yml` on push to `main` when `observability-stack/**` changes.
+`observability-stack/` is a Docker Compose project deployed to the same instance by `deploy-grafana.yml`.
 
-| Service | Role |
-|---|---|
-| Grafana | Dashboards and alerting |
-| Loki | Log storage backend |
-| Promtail | Scrapes `/var/log/flask/*.log` and ships to Loki |
-| Tempo | Distributed tracing backend (receives OTLP spans from Flask) |
-| Mimir | Long-term metrics storage |
-| Prometheus | Metrics scraping |
+| Service | State | Role |
+|---|---|---|
+| Grafana (`:3000`) | running | Dashboards; the Loki data source and a dashboard are provisioned from Git |
+| Loki (`:3100`) | running | Log storage |
+| Promtail | running | Ships Docker container logs (label `job=flask`, a legacy name) and `/var/log/nginx/*.log` to Loki |
+| Tempo, Mimir, Prometheus | **disabled** (commented out in the compose file) | The app does not export traces or metrics yet |
 
-Grafana is accessible only via the EC2 instance's IP — it is not exposed publicly.
+**Access.** Grafana and Loki are published on the instance, but the security groups do not open those ports to the internet. Reach Grafana through an SSM port-forward (needs the AWS Session Manager plugin):
+
+```bash
+aws ssm start-session --target <instance-id> \
+  --document-name AWS-StartPortForwardingSession \
+  --parameters '{"portNumber":["3000"],"localPortNumber":["3000"]}'
+# then open http://localhost:3000
+```
+
+The committed `.env` sets the login to `admin` / `admin`. The deploy never overwrites an existing `.env` on the instance, so **change it there**.
+
+**Deployment.** On a push to `main` touching `observability-stack/**` (or manually), the instance downloads this repository at that commit from GitHub (the repo is public) and runs `docker-compose pull && docker-compose up -d`. Markdown files are not copied, and only changed services are recreated.
 
 ---
 
 ## CI/CD
 
-| Workflow | Trigger | Action |
-|---|---|---|
-| `terraform-frontend.yml` | PR touching `frontend/infra/**`; push to `main` touching it; manual | Calls `_terraform.yml`: checks (fmt, validate, tflint) + plan; on `main` also apply after approval |
-| `terraform-backend.yml` | PR touching `backend/infra/**`; push to `main` touching it; manual | Same, for `backend/infra` |
-| `_terraform.yml` | Called by the two workflows above | Shared logic: pinned Terraform, plan summary, approval-gated apply |
-| `ci.yml` | PR to `main` (and called by `release.yml`) | gofmt, vet, tests, actionlint, shellcheck, hadolint, govulncheck, image build + smoke test; single required check `CI gate` |
-| `release.yml` | Push of tag `vX.Y.Z`, or manual run with a tag | Verify tag → CI → build & push image → approval → deploy via SSM (canary) → verify public API version |
-| `static-deploy.yml` | Push to `main` touching `frontend/static/**`, or manual | S3 sync with cache headers + CloudFront invalidation + verification of the bucket |
-| `deploy-grafana.yml` | Push to `main` touching `observability-stack/**`, or manual | EC2 downloads the repo at the commit (via SSM) and runs `docker-compose up -d` |
+Everything is GitHub Actions. The logic lives in [`scripts/`](scripts), each script checked with `shellcheck`, and the workflows only wire it together.
 
-**Required GitHub Secrets:**
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `ci.yml` | Pull request to `main`; also called by `release.yml` | Format, vet, tests, lint, vulnerability scan, image build and smoke test. Its single required check is **`CI gate`** |
+| `release.yml` | Push of a tag `vX.Y.Z`; or manual with a tag | Verify tag → CI → build and push image → **approval** → deploy → verify |
+| `terraform-frontend.yml`, `terraform-backend.yml` | PR / push to `main` touching their `infra/` directory; manual | Thin callers of `_terraform.yml` |
+| `_terraform.yml` | Called by the two above | Checks, plan, and an approval-gated apply |
+| `static-deploy.yml` | Push to `main` touching `frontend/static/**`; manual | Upload with cache headers, invalidate CloudFront, verify the bucket |
+| `deploy-grafana.yml` | Push to `main` touching `observability-stack/**`; manual | Deploy the observability stack |
+
+### CI (`ci.yml`)
+
+| Job | Checks |
+|---|---|
+| `Go` | `gofmt`, `go vet`, `go build`, `go test -race` |
+| `Lint` | `actionlint` (which also runs `shellcheck` on workflow scripts), `shellcheck` on `scripts/`, `hadolint` on the Dockerfile |
+| `Vulnerability scan` | `govulncheck`; blocking, so a new advisory can turn it red with no code change |
+| `Image` | Builds the image and **starts it**: it must not run as root, must answer `/api/status`, and its `HEALTHCHECK` command must succeed |
+| `CI gate` | Passes only if all of the above passed. It is the check the `main` ruleset requires |
+
+There is deliberately no `paths:` filter on CI, so `CI gate` always reports. The tool versions (`actionlint`, `govulncheck`, `hadolint`) are pinned in the file, with the `hadolint` download verified by checksum.
+
+### Release (`release.yml`)
+
+```
+tag vX.Y.Z pushed
+  └─ verify   the tag is vMAJOR.MINOR.PATCH, exists, and its commit is on main
+      └─ ci        the same checks as a pull request
+          └─ build     image built FROM THE TAGGED COMMIT, pushed to Docker Hub as <user>/go-app:vX.Y.Z
+              └─ deploy   waits for approval (Environment "production")
+                          → scripts/deploy-app.sh on the instance via SSM
+                          → checks that the public API reports vX.Y.Z
+```
+
+- **Canary deploy** (`scripts/deploy-app.sh`): pulls the image, starts it as a canary on port 8001, promotes it (replaces the production container on port 8000, `--restart unless-stopped`) only if `/api/status` answers `ok`. If the canary fails, the running container is untouched.
+- **A failed CI never deploys**: on a tag push a skipped build does not count as a success. Only a manual run may skip the build.
+- **Rollback / redeploy:** *Actions → Release → Run workflow* with an existing tag. The image is not rebuilt; the same approval and post-deploy check apply.
+
+### Terraform
+
+One reusable workflow, `_terraform.yml`, serves both directories:
+
+| Job | Runs | Content |
+|---|---|---|
+| `Checks` | every run, **no secrets needed** | `terraform fmt -check`, `init -backend=false`, `validate`, `tflint` (warnings are shown; errors fail). Warns when `init` would change the provider lock file |
+| `Plan` | every run, except PRs from forks or Dependabot | Real plan in HCP Terraform, summarised on the run's **Summary page** |
+| `Apply` | push to `main` or a manual run on `main` only | Waits for approval on Environment `infrastructure`, then `terraform apply` |
+
+The flow: open a PR → read the plan in the summary → merge → the workflow plans again on `main` → **read that plan**, then approve the apply. A failed apply leaves `main` as merged, so fix forward with a new PR. The apply trigger deliberately excludes the workflow files: editing a workflow never applies infrastructure. Terraform is pinned (`1.10.5` for the CLI; the workspace runs its own version), and so is `tflint`.
+
+### Static site and observability deploys
+
+- `static-deploy.yml`: two `aws s3 sync` passes (one per cache header), a CloudFront invalidation of `/*`, then `scripts/verify-static-headers.sh`, which fails if any object is missing, has the wrong header, or if the bucket holds anything not in `dist/`. Configuration comes from repository Variables.
+- `deploy-grafana.yml`: one SSM call running `scripts/deploy-observability.sh`.
+
+### Building blocks
+
+| Piece | Role |
+|---|---|
+| `.github/actions/ssm-run` | Composite action: runs a repository script on the instance through SSM, waits, prints the output, fails unless it succeeded |
+| `scripts/ssm-run.sh` | The logic behind that action. It builds the payload safely (values are quoted, never interpreted), tolerates the short delay before the command record exists, and gives up on a timeout |
+| `scripts/deploy-app.sh` | Canary deploy (runs on the instance) |
+| `scripts/deploy-observability.sh` | Fetches the repo at a commit, keeps an existing `.env`, installs Docker Compose (pinned, checksum-verified) if missing, starts the stack (runs on the instance) |
+| `scripts/release-verify-tag.sh` | Tag checks for the release |
+| `scripts/verify-deployment.sh` | Polls the public API until it reports the expected version |
+| `scripts/smoke-test-image.sh` | Starts the built image and checks it (used by CI) |
+| `scripts/terraform-plan-summary.sh` | Turns a plan into the summary page: a one-line verdict and the full output, HTML-escaped |
+| `scripts/verify-static-headers.sh` | Post-deploy check of the bucket |
+
+### Conventions
+
+- Every action is pinned to a **full commit SHA** (with a version comment), and GitHub enforces it. Dependabot proposes updates weekly: minor and patch grouped, major versions as separate PRs. Terraform updates are left off because Dependabot PRs cannot read `TF_API_TOKEN`.
+- Workflows declare least-privilege `permissions`, a `timeout-minutes` on every job, and `concurrency` groups: deploys queue and never cancel a running deploy; plans and CI cancel superseded runs.
+- Untrusted values reach shell code through `env:`, not by inline `${{ }}` interpolation.
+
+---
+
+## Repository protections and configuration
+
+### Rulesets (Settings → Rules)
+
+| Ruleset | Rules | Bypass |
+|---|---|---|
+| `main` | Pull request required (0 approvals: a solo owner cannot approve their own); status check **`CI gate`** (from GitHub Actions) must pass; no force-push; no deletion | Admin, **only when merging a pull request** (emergencies); direct pushes stay blocked |
+| `release-tags-create` | Only admins can create `v*` tags | Admin |
+| `release-tags-immutable` | Nobody can move or delete a `v*` tag | **None**; removing a tag means disabling the ruleset first |
+
+### Environments (Settings → Environments)
+
+| Environment | Used by | Protection |
+|---|---|---|
+| `production` | the deploy job of `release.yml` | Required reviewer; allowed from `main` and tags `v*` |
+| `infrastructure` | the apply job of `_terraform.yml` | Required reviewer; allowed from `main` |
+
+### Secrets and variables
 
 | Secret | Used by |
 |---|---|
-| `TF_API_TOKEN` | All Terraform workflows |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | release, static-deploy, deploy-grafana |
-| `DOCKER_USERNAME` / `DOCKER_PASSWORD` | release |
+| `TF_API_TOKEN` | Terraform workflows (plan and apply) |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | release (deploy job), static-deploy, deploy-grafana |
+| `DOCKER_USERNAME`, `DOCKER_PASSWORD` | release (build job) |
 
-**Repository Variables** (Settings → Secrets and variables → Actions → Variables). These are not secrets, so they live in variables. The workflows use the variable when it is set and fall back to the old secret of the same purpose, so the switch is safe to do in any order:
+| Variable | Used by |
+|---|---|
+| `AWS_REGION` | release, static-deploy, deploy-grafana |
+| `S3_BUCKET` | static-deploy |
+| `CLOUDFRONT_DISTRIBUTION_ID` | static-deploy |
 
-| Variable | Fallback secret | Used by |
-|---|---|---|
-| `AWS_REGION` | `AWS_REGION` | release, static-deploy, deploy-grafana |
-| `S3_BUCKET` | `BUCKET_NAME` | static-deploy |
-| `CLOUDFRONT_DISTRIBUTION_ID` | `DISTRIBUTION_ID` | static-deploy |
+`PERSONAL_ACCESS_TOKEN`, `EC2_USER` and `EC2_SSH_KEY` are no longer used by any workflow.
 
-Once the variables are set, the secrets `AWS_REGION`, `BUCKET_NAME` and `DISTRIBUTION_ID` can be deleted. `PERSONAL_ACCESS_TOKEN`, `EC2_USER` and `EC2_SSH_KEY` are no longer used by any workflow and can be deleted too.
+### Other settings
 
----
+- **Actions:** SHA pinning is required; the default token is read-only; Actions cannot approve PRs
+- **Secret scanning and push protection:** on
+- **Dependabot alerts and security updates, CodeQL:** currently off (all free on a public repository)
 
-## Security Considerations
-
-- EC2 HTTP/HTTPS ingress is restricted to the [CloudFront managed prefix list](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/LocationsOfEdgeServers.html) — direct internet access to the instance is blocked
-- SSH access is gated via `ssh_allowed_cidr` — set this to your IP in production, not `0.0.0.0/0`
-- The Flask container runs as a non-root user (`appuser`)
-- All viewer traffic is redirected to HTTPS at CloudFront (`redirect-to-https`)
-- TLS minimum version: `TLSv1.2_2021`
-- S3 bucket is private; CloudFront accesses it via Origin Access Control (OAC)
-
----
-
-## How to Use
+<details>
+<summary>Commands to recreate the environments and rulesets</summary>
 
 ```bash
-git clone https://github.com/denisgulev/gitops-playground.git
-cd gitops-playground
+REPO="<owner>/<repo>"; ME=$(gh api user --jq .id)     # replace the placeholder with your repository
+
+# Environments (create BEFORE the first release / infra change)
+gh api -X PUT repos/$REPO/environments/production --input - <<EOF
+{"reviewers":[{"type":"User","id":$ME}],"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
+EOF
+gh api -X POST repos/$REPO/environments/production/deployment-branch-policies -f name=main -f type=branch
+gh api -X POST repos/$REPO/environments/production/deployment-branch-policies -f name='v*' -f type=tag
+gh api -X PUT repos/$REPO/environments/infrastructure --input - <<EOF
+{"reviewers":[{"type":"User","id":$ME}],"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
+EOF
+gh api -X POST repos/$REPO/environments/infrastructure/deployment-branch-policies -f name=main -f type=branch
+
+# Main branch ruleset (15368 is the GitHub Actions app; role 5 is Repository admin)
+gh api -X POST repos/$REPO/rulesets --input - <<'EOF'
+{"name":"main","target":"branch","enforcement":"active",
+ "conditions":{"ref_name":{"include":["~DEFAULT_BRANCH"],"exclude":[]}},
+ "bypass_actors":[{"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"pull_request"}],
+ "rules":[{"type":"deletion"},{"type":"non_fast_forward"},
+  {"type":"pull_request","parameters":{"required_approving_review_count":0,"dismiss_stale_reviews_on_push":false,"require_code_owner_review":false,"require_last_push_approval":false,"required_review_thread_resolution":false}},
+  {"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":false,"required_status_checks":[{"context":"CI gate","integration_id":15368}]}}]}
+EOF
+
+# Release tags: creation for admins, immutability for everyone
+gh api -X POST repos/$REPO/rulesets --input - <<'EOF'
+{"name":"release-tags-create","target":"tag","enforcement":"active",
+ "conditions":{"ref_name":{"include":["refs/tags/v*"],"exclude":[]}},
+ "bypass_actors":[{"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"always"}],
+ "rules":[{"type":"creation"}]}
+EOF
+gh api -X POST repos/$REPO/rulesets --input - <<'EOF'
+{"name":"release-tags-immutable","target":"tag","enforcement":"active",
+ "conditions":{"ref_name":{"include":["refs/tags/v*"],"exclude":[]}},
+ "bypass_actors":[],
+ "rules":[{"type":"update"},{"type":"deletion"}]}
+EOF
+
+# Require SHA pinning for actions
+gh api -X PUT repos/$REPO/actions/permissions -F enabled=true -f allowed_actions=all -F sha_pinning_required=true
 ```
 
-1. Create a Terraform Cloud organization and two workspaces: `Backend` and `Frontend`
-2. Create a Route 53 hosted zone for your domain and point your registrar's NS records to it
-3. Create an S3 bucket for Terraform state (or use Terraform Cloud's built-in state)
-4. Fill in `backend/infra/terraform.tfvars` and `frontend/infra/terraform.tfvars` (copy from `.example` files)
-5. Set all Terraform variables and GitHub secrets listed above
-6. Apply backend infrastructure first (`backend/infra/`), then frontend (`frontend/infra/`)
-7. Push a version tag to trigger the first Docker build and deployment
+</details>
 
 ---
 
-## Further Reading
+## Runbook
+
+**Release a version**
+
+```bash
+git switch main && git pull
+git tag v1.2.0 && git push origin v1.2.0       # must be on a commit that is on main
+```
+
+Then open the run (*Actions → Release*), and approve the `production` deployment once CI and the build are green.
+
+**Roll back or redeploy:** *Actions → Release → Run workflow*, enter the tag (for example `v1.1.0`), and approve.
+
+**Change infrastructure:** PR → read the plan on the run's Summary page → merge → read the plan of the run on `main` → approve the `infrastructure` deployment.
+
+**Delete or move a release tag:** disable the `release-tags-immutable` ruleset, do it, re-enable it.
+
+```bash
+gh api -X PUT repos/<owner>/<repo>/rulesets/<id> -f enforcement=disabled   # ...and =active afterwards
+```
+
+**Check that a deployment worked**
+
+```bash
+curl -s https://api.<domain>/api/status                       # status "ok" and the expected version
+curl -sI https://static-website.<domain>/ | grep -i cache-control
+```
+
+**Emergency:** a red required check blocks merging. As admin you can still merge the PR (the bypass applies to pull requests only). To push directly, disable the `main` ruleset temporarily and re-enable it afterwards. To turn SHA pinning off, set `sha_pinning_required=false` with the command above.
+
+---
+
+## Design notes
+
+**CORS is handled by Nginx**, not by the app. Nginx answers `OPTIONS` preflights with `204` and adds `Access-Control-Allow-Origin` (the static site's origin), `Allow-Methods` and `Allow-Headers` to every response, then proxies to the container. Because the API is also reachable under `static-website.<domain>/api/*` on the same distribution, a same-origin call would need no CORS at all.
+
+**The EC2 address crosses workspaces through SSM.** The backend workspace writes `/infra/ec2/public_dns`, and the frontend workspace reads it as a data source to configure the CloudFront EC2 origin, so the two workspaces never need to know each other's state. This is why the backend is applied first.
+
+**The instance only accepts CloudFront.** The security group looks up the CloudFront origin-facing managed prefix list with a data source, so the allowed ranges stay current without maintenance.
+
+**No SSH for deployments.** The instance role includes SSM core; the workflows read the instance id from `/infra/ec2/instance_id` and send commands through SSM Run Command. SSH remains open to `ssh_allowed_cidr` only as a break-glass path.
+
+---
+
+## Security
+
+What is in place:
+
+- **Network:** HTTP/HTTPS to the instance only from CloudFront's prefix list; TLS 1.2+ and redirect-to-HTTPS at CloudFront; the S3 bucket is private and readable only by the distribution (OAC)
+- **Container:** non-root, `scratch` image (no shell), health-checked; every release is built from a tag that must be on `main`
+- **Delivery:** a required check before merging, approvals for production and infrastructure, immutable release tags, SHA-pinned actions, least-privilege workflow tokens, secret scanning with push protection
+- **Deployments:** commands reach the instance through SSM only, with values quoted rather than interpreted, and inputs (tag, repo, commit) are validated before use
+
+Known gaps are listed below.
+
+---
+
+## Known limitations and roadmap
+
+**Planned**
+
+- **OIDC instead of AWS access keys.** Three workflows still authenticate with a long-lived IAM user key stored as GitHub secrets. Replacing it with per-run, short-lived credentials from an IAM OIDC role is the next step.
+- **Security features** that are still off: Dependabot alerts and security updates, CodeQL.
+
+**Known and not yet fixed**
+
+- **Rate limiting.** The limiter keys on the connection's remote address (`ip:port`), and the app sits behind CloudFront and Nginx, so it is *probably* not limiting per visitor; this has not been confirmed against production logs. The state is in memory, and it is cleared every 10 minutes. A layered design (Nginx `limit_req` with the real client address, the app limiter fixed to read it, and optionally AWS WAF) is the intended fix. The Docker health check also calls `/api/status`, so that route should be exempted before the limiter is corrected.
+- **Origin exposure.** CloudFront reaches the instance over plain HTTP, and the prefix list admits *any* CloudFront distribution, not only this one. A secret header checked by Nginx would close that.
+- **Observability is partial.** No traces or metrics are exported (there is no `/metrics` endpoint), and there are no alerts. The CloudWatch log copy drops structured attributes, and its log group has no retention set.
+- **Single instance.** One EC2 instance in one subnet, with a short interruption while the container is swapped. Editing `user_data.sh` replaces the instance.
+- **Terraform housekeeping.** Unused variables (`subdomain`, `hosted_zone_id`) and a local (`module_name`); the AMI id is hardcoded; IMDSv2 is not enforced; the instance role's logs permission uses `Resource: "*"`; the frontend lock file carries an unused `hashicorp/local` entry (CI warns about it); the S3 behaviour in CloudFront allows write methods. `removed.tf` can be deleted once applied.
+- **Grafana** ships with `admin` / `admin`, and Loki has no authentication (both are unreachable from the internet by network rules).
+
+Cost note: everything above runs on free tiers of the GitHub features used (public repository) and adds nothing to the AWS bill beyond the resources themselves.
+
+---
+
+## What changed in the CI/CD hardening
+
+A summary of the work that turned the original workflows into what this document describes (all on 2026-09-21):
+
+1. **Baseline.** The Go rewrite's tests and `-healthcheck` flag were committed (the Dockerfile's `HEALTHCHECK` called a flag the binary did not have), and a Go CI added.
+2. **Hygiene.** Actions pinned to SHAs, `permissions`, `timeout-minutes`, `concurrency`, untrusted values moved into `env:`, Dependabot added.
+3. **One CI with a gate.** `ci.yml` replaced the Go-only workflow: format, vet, tests, lint, vulnerability scan, image smoke test, and a single `CI gate` check.
+4. **SSM scripts.** The copy-pasted "send, wait, print, fail" code became one composite action and scripts; the observability deploy now pulls the repository at the commit instead of uploading base64 files.
+5. **Release in one workflow.** Tag → checks → build (from the tagged commit, without emulation) → approval → deploy → verification, with rollback by manual run. This replaced the bot pull request, the personal access token and `deployment-version.txt`.
+6. **Terraform in one reusable workflow.** Checks without secrets, a plan summary, and an apply after merge behind approval, replacing the label-triggered apply from unmerged pull-request code.
+7. **Static site.** Cache headers, repository variables instead of secrets, a post-deploy check of the bucket, and Terraform stopped managing the site files.
+8. **Repository protections.** The `main` and release-tag rulesets, the two Environments and enforced SHA pinning.
+9. **Dependencies.** Go 1.27.0 (which also cleared the reachable vulnerabilities) and current versions of the Go libraries and all actions.
+
+---
+
+## Further reading
+
+The original articles were written for the earlier Python/Flask version of the backend; the infrastructure they describe still applies.
 
 - [Deploy a Static Website with AWS S3, CloudFront, and Terraform](https://denisgulev.com/static-website-with-aws-s3-cloudfront-and-terraform/)
-- [Deploy a Flask Backend on AWS EC2 with Terraform](https://denisgulev.com/deploy-flask-backend-on-aws-ec2-with-terraform/)
+- [Deploy an EC2 Instance with internet access](https://denisgulev.com/deploy-flask-backend-on-aws-ec2-with-terraform/)
 
-
-This repository provides Terraform templates to quickly deploy both a static frontend website and a backend service using AWS infrastructure. The frontend is hosted on AWS S3, with CloudFront for content distribution and Route 53 for DNS management.
-The backend service is a Flask app that runs as docker container inside an EC2 instance.
-
-### Architecture
-
-- **Static Frontend**: Hosted on an S3 bucket, served via CloudFront.
-- **API Backend**: Running Flask on EC2, accessible through the same CloudFront distribution under the /api/* path.
-- **CloudFront**: Configured with multiple origins to serve both the static content from S3 and the API from EC2. A CloudFront function is used to remove the "www." prefix from the domain.
-- **Route 53 DNS**: Manages domain names and subdomains (e.g., static-website.example.com, api.example.com).
-
-### CloudFront Setup — Multiple Origins
-
-Two origins are configured inside one CloudFront distribution:
-- Origin 1 (S3): Static site.
-- Origin 2 (EC2): API.
-
-Key CloudFront settings:
-1. **default_cache_behavior**: Handles static content (targeting S3).
-2. **ordered_cache_behavior** with path_pattern = "/api/*": Routes API calls to EC2.
-3. Attached cache policies and viewer protocol policies for both.
-4. **CloudFront Function** for www redirection.
-
-### Route53 Records — Proper Domain Routing
-1. A record for static-website.example.com -> CloudFront distribution.
-2. A record for api.example.com -> Same CloudFront distribution (CloudFront routes to correct origin via /api/* pattern).
-3. CNAME for www.static-website.example.com pointing to static-website.example.com for redirect.
-
-**Note: Both frontend and backend share CloudFront, but routing depends on path and/or subdomain.
-
-### CORS Handling — API (EC2 with Flask)
-
-Initially:
-- CORS issues when frontend called backend via CloudFront.
-- Missing preflight (OPTIONS) response support.
-
-✅ Resolved by:
-- <strike>Adding Flask-CORS, correctly configured:
-  ```python
-    CORS(app, 
-      origins=["https://static-website.example.com"], 
-      supports_credentials=True,
-      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allow_headers=["Content-Type", "Authorization"])
-  ```
-  </strike>
-- Configuring CORS through nginx
-  ```conf
-    # Handle OPTIONS requests
-    if (\$request_method = 'OPTIONS') {
-        access_log /var/log/nginx/options_requests.log;
-        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
-        add_header 'Access-Control-Allow-Origin' 'https://static-website.denisgulev.com' always;
-        add_header 'Access-Control-Max-Age' 1728000;
-        add_header 'Content-Type' 'text/plain charset=UTF-8';
-        add_header 'Content-Length' 0;
-        return 204;
-    }
-
-    # CORS headers
-    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-    add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
-    add_header 'Access-Control-Allow-Origin' 'https://static-website.denisgulev.com' always;
-
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_pass http://localhost:5000;
-  ```
-  Functionality:
-  
-  1. Handles OPTIONS Requests (Preflight Requests)
-    - Checks if the request method is OPTIONS
-    - Sets necessary CORS headers
-    - Returns a 204 No Content response with appropriate headers
-  2. Adds CORS Headers for Actual Requests
-    - Ensures that actual requests also return CORS headers
-  3. Proxying Requests to the Backend
-    - Forwards requests to a backend running on localhost:5000
-    - Sets headers to pass along client information
-
-### Security Groups — Restricting EC2 to CloudFront
-
-Ideally we want to restrict access to EC2 only for requests coming from the CloudFront.
-Currently i am setting manually this, by choosing the **prefix list** of CloudFront.
-
-🚀 **Next Steps**
-
-<strike>Automate the usage of this prefix list through AWS lamdba, which will update the security group with the update prefix list of CloudFront.</strike> -> **DONE**
-  - i managed to automatically retrieve the prefix list for CloudFront, by using the following
-    ```terraform
-      # Data source to fetch the CloudFront prefix list
-      data "aws_ec2_managed_prefix_list" "cloudfront" {
-        name = "com.amazonaws.global.cloudfront.origin-facing"
-      }
-
-      resource "aws_vpc_security_group_ingress_rule" "sg_ingress_http" {
-        security_group_id = aws_security_group.flask_sg_http.id
-        ....
-        prefix_list_id = data.aws_ec2_managed_prefix_list.cloudfront.id
-        ....
-      }
-    ```
-
-### Terraform Workspaces — Cross-workspace Resources Issue
-
-Problem:
-- EC2 instance managed in a separate Terraform workspace/project.
-- CloudFront defined in another workspace needs to use EC2’s public DNS as an origin.
-
-✅ Solution:
-<strike>
-- Save EC2 instance as terraform variable in the workspace we want to reference the instance.
-- Reference EC2’s public DNS
-  ```hcl
-    data "aws_instance" "imported_instance" {
-      instance_id = var.ec2_instance_id
-    }
-  ```
-➡️ **Note**: If EC2 is modified in its own workspace, updates won’t propagate unless you re-import or manage the resource cross-workspace properly (e.g., through Terraform Cloud workspaces or outputs).
-</strike>
-
-- in the backend setup, i save the ec2_dns inside an SSM parameter
-  ```
-    resource "aws_ssm_parameter" "ec2_dns" {
-      name  = "/infra/ec2/public_dns"
-      type  = "String"
-      value = aws_eip.flask_app_eip.public_dns
-    }
-  ```
-- the frontend retrieves this parameter, if this is not found, a default value is set (in order to allow the static page to function)
-  ```
-    data "aws_ssm_parameter" "ec2_dns" {
-      name = "/infra/ec2/public_dns"
-    }
-
-    locals {
-      ec2_dns = try(data.aws_ssm_parameter.ec2_dns.value, var.ec2_dns)
-    }
-
-    resource "aws_cloudfront_distribution" "s3_distribution" {
-      ...
-      ...
-
-      origin {
-        domain_name = local.ec2_dns
-        origin_id   = "EC2-origin"
-      ...
-      }
-      ...
-      ...
-    }
-
-  ```
-
-### Automate Frontend Deployments — Both Infrastructure and Static Files
-
-To streamline frontend deployments, we implemented a GitHub Actions workflow that automates the management of both infrastructure and static files. 
-
-#### Infrastructure
-
-The process begins when a pull request (PR) is created with changes to the **frontend/infra/** directory. Upon PR creation, the checks (format, validate, tflint) and a Terraform Plan are automatically executed, evaluating the infrastructure changes without applying them; the plan is shown in the run's job summary. After the PR is merged, the workflow plans again on `main` and the Apply job waits until a reviewer approves the `infrastructure` Environment, so the reviewer sees the plan that is about to be applied.
-
-#### Static Files
-
-Static files (HTML, CSS, JS) are automatically deployed to an S3 bucket when committed to the **frontend/static/** directory.
-
-### Automate infrastructure changes via GitHub Actions
-
-The process is similar to the one for the frontend flow.
-When a pull request (PR) is created with changes to the **backend/infra/** directory, `terraform-backend.yml` automatically runs the checks and a Terraform Plan, without applying anything. After the merge, the Apply job runs on `main` once a reviewer approves the `infrastructure` Environment.
-
-#### *Notes on how deployments works*
-
-Developers begin by working on changes in a dedicated feature branch. Once the work is complete, they open a pull request targeting the main branch. This initiates a structured deployment process:
-1.	The checks (fmt, validate, tflint) and a Terraform Plan run automatically to preview infrastructure changes (handled separately for frontend and backend). The plan appears in the job summary of the run.
-2.	If the checks fail or the plan reveals issues or requires improvements, the reviewer leaves feedback on the PR and the author pushes changes.
-3.	If everything looks good, the PR is merged into the main branch.
-4.	On `main` the workflow plans again and the Apply job waits for approval on the `infrastructure` Environment. Approving it applies the changes; a failed apply leaves `main` as merged, so fix forward with a new PR.
-
-**One-time setup:** create the `infrastructure` Environment with a required reviewer *before* the first infra change is merged. GitHub silently creates a missing environment without protection rules, which would skip the approval.
-
-## Frontend Setup
-
-The static frontend app is described in detail in the following article:  
-[Deploy a Static Website with AWS S3, CloudFront, and Terraform](https://denisgulev.com/static-website-with-aws-s3-cloudfront-and-terraform/).
-
-In this article, you'll find a step-by-step guide on how to set up an S3-backed static website using Terraform, including CloudFront distribution, DNS configuration with Route 53, and more.
-
-### Diagram
-
-![Static Web Hosting](./assets/static-web-hosting.png)
-
-## Backend Setup
-
-The backend service is deployed on a single EC2 instance running a simple Python Flask application. This backend architecture is designed to be minimal yet production-ready, including a robust networking layer, proper IAM permissions, and logging capabilities. 
-
-All infrastructure components — from networking to compute and security — are fully managed and provisioned using Infrastructure as Code (IaC) through Terraform, ensuring consistent, repeatable, and easily maintainable deployments.
-
-The backend app is described in detail in the following article:  
-[Deploy an EC2 Instance with internet access](https://denisgulev.com/deploy-flask-backend-on-aws-ec2-with-terraform/).
-
-### Architecture Components
-- **EC2 Instance**: Hosts a Flask application.
-- **Networking Layer**:
-   - **VPC**: A dedicated Virtual Private Cloud for isolation and security.
-   - **Public Subnets**: For resources that require direct access to the internet, including the EC2 instance.
-   - **Private Subnets**: Reserved for future use, such as databases or internal services that shouldn’t be publicly accessible.
-   - **Security Group**: Controls traffic to the EC2 instance with:
-   - **Ingress Rules**: Allow HTTP (port 80), HTTPS (443) and SSH (port 22) access.
-   - **Egress Rule**: Allows all outbound traffic.
-   - **Internet Gateway**: Provides internet connectivity for the VPC.
-   - **Route Table & Associations**: Routes traffic appropriately within the VPC and to the internet.
-   - **IAM Roles**: 
-      1. An iam role attached to the instance, granting permissions to write logs to CloudWatch Logs for better monitoring and observability.
-      1. An iam role that allows to fetch prefix list ids for global CloudFront.
-
-### Flask Application
-
-The Flask backend exposes a single API endpoint as an example of a backend service. It is served using Gunicorn, a WSGI HTTP server for Python, behind Nginx, which acts as a reverse proxy for better performance and security.
-
-### Diagram
-
-![Backend](./assets/backend.png)
-
-## How to Use
-
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/denisgulev/gitops-playground.git
-   cd gitops-playground
-   ```
-2.	Customize the variables in the frontend and backend directories to suit your needs.
-3.	Follow the instructions in the linked article to deploy the frontend static website.
-4.	Follow the instructions in the linked article to deploy the backend service.
-
-
-## 📌 Future Developments  
-
-- <strike>**Connect the Static Frontend with the Backend API**</strike> - **DONE**
-  - Expose backend API under a proper domain (e.g., `api.example.com`).  
-  - Configure CORS settings to allow frontend-backend communication.  
-  - Update frontend to interact with backend endpoints.  
-
-- <strike>**Implement CI/CD Pipelines for Frontend and Backend**</strike> - **DONE**
-  - Automate frontend deployments (S3 + CloudFront invalidation) using GitHub Actions. 
-  - Automate backend EC2 updates and infrastructure changes via GitHub Actions.  
-
-    - I’ve split the infrastructure from the backend service (Flask app):
-
-      1. The infrastructure code lives in the *backend/infra/* folder. Any PRs to the *main* branch that touch files in this folder will trigger the *terraform-backend.yml* workflow. This runs the checks and a *terraform plan*; after the merge, the *terraform apply* runs on *main* once a reviewer approves it.
-
-      2. The backend service runs in Docker. Whenever a version tag is pushed, the *release.yml* workflow runs the checks, builds a Docker image from the tagged commit and pushes it to Docker Hub, then deploys it after approval.
-
-  - automate the deployment of docker image inside EC2 instance **DONE**
-    
-    ### 🚀 Automated Deployment Workflow for Flask App
-
-    #### 🧱 Branch Structure
-    -	**backend branch** -> Development branch. New changes are pushed here and tested by a reviewer or i may setup a workflow to test the changes.
-      
-    -	**main branch** -> Production-ready branch. After staging validation and management approval, changes are merged into main, version-tagged, and deployed to production through a gated process.
-
-
-    #### 🛠 CI/CD Pipeline Overview
-
-    ##### 1. ✅ Push to backend
-      - The app is ready to be tested (currently requires a manual pull and local testing)
-      - Once everything is tested, a PR is issued towards main branch
-
-    #### 2. ✅ Merge backend → main and Create a Tag
-      - Merge changes into main
-      - Create a new Git tag (e.g., v1.0.0)
-
-    #### 3. ✅ Tag Push → Checks → Build & Push Docker Image
-      - `release.yml` verifies the tag (format `vX.Y.Z`, on `main`) and runs the CI checks
-      - GitHub Actions builds the image from the tagged commit
-      - Tags and pushes it to Docker Hub (e.g., go-app:v1.0.0)
-
-    #### 4. ✅ Approval → Deploy to Production
-      - The deploy job waits for approval on the `production` Environment (required reviewer)
-      - After approval it runs `scripts/deploy-app.sh` on the EC2 instance through SSM:
-        - Pulls the new Docker image and starts a canary container
-        - Promotes it only if the canary health check passes; otherwise the running container is left untouched
-      - Finally checks that the public API reports the new version
-      - Roll back by running the workflow manually with an older tag
-
-- **Add Monitoring, Logging, and Alerts**  
-  - Enable detailed **CloudWatch Logs** for backend (Nginx, Gunicorn, Flask).  
-  - Set up **CloudWatch Alarms** for critical metrics (CPU, memory, HTTP errors).  
-  - Configure notification systems (e.g., **SNS**, email, Slack) for alerts.  
-  #### 📊 Observability Stack (Grafana + Loki + Promtail)
-
-  This repository contains the GitOps-managed configuration to deploy a full observability stack on an AWS EC2 instance using Docker Compose and GitHub Actions.
-
-  ##### 🧰 Stack Components
-  
-  Grafana -> Visualization & alerting platform
-  
-  Loki -> Log aggregation backend
-
-  Promtail -> Log collector/forwarder from EC2 instance
-
-  #### 📁 Log Collection (via Promtail)
-
-  Promtail is currently configured to collect logs from:
-  - **/var/log/flask/*.log** (Flask application logs)
-
-  To add support for additional services (e.g., Nginx, Gunicorn), update the `promtail-config.yaml` file by adding new `scrape_configs` with appropriate paths.
-
-  #### 🌐 Accessing Grafana
-
-  Grafana is accessible **only internally** via the EC2 instance’s IP.  
-  It is not exposed through a public domain or CloudFront.
-
-  #### 🔔 Alerting
-
-  Grafana supports:
-  - Log-based alerting
-  - Notification channels (Email, Slack, Webhook, etc.)
-
-  Alerts can be version-controlled using provisioning or exported JSON.
-
-
-
-- **Security Hardening**  
-  - Apply least privilege principles to IAM roles and security groups.  
-  - Enable HTTPS for backend and frontend (SSL/TLS via ACM).  
-  - Add security headers, rate limiting, and request validation to backend (Nginx/Flask).  
-  - Consider adding **AWS WAF** and API throttling for additional protection.  
+Licensed under the terms in [LICENSE](LICENSE).
