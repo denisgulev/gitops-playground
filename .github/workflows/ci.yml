@@ -1,0 +1,146 @@
+name: CI
+
+# Runs on every PR (no `paths:` filter on purpose): the `CI gate` job must
+# always report, otherwise a required check would stay "pending" forever on
+# PRs whose files did not match a filter. Branch protection should require
+# only `CI gate`.
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+# A newer push to the same PR makes the older run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Tool versions are pinned; Dependabot does not track these, bump by hand.
+  ACTIONLINT_VERSION: v1.7.12
+  GOVULNCHECK_VERSION: v1.8.0
+  HADOLINT_VERSION: v2.15.1
+  # sha256 of hadolint-linux-x86_64 for HADOLINT_VERSION (from the release's checksums.sha256)
+  HADOLINT_SHA256: c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507
+
+jobs:
+  go:
+    name: Go (format, vet, build, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend/app
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: backend/app/go.mod
+          cache-dependency-path: backend/app/go.sum
+
+      - name: Check formatting (gofmt)
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::These files are not gofmt-formatted (run 'gofmt -w backend/app'):"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Go Vet
+        run: go vet ./...
+
+      - name: Go Build
+        run: go build ./...
+
+      - name: Go Test
+        run: go test ./... -race -v
+
+  lint:
+    name: Lint (workflows, shell, Dockerfile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # Only used to build actionlint from source (checksummed by the Go module proxy).
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: backend/app/go.mod
+          cache-dependency-path: backend/app/go.sum
+
+      # actionlint runs shellcheck (preinstalled on ubuntu-latest) on every `run:` block.
+      - name: Lint workflows (actionlint)
+        run: |
+          go install "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
+          "$(go env GOPATH)/bin/actionlint" -color
+
+      # No scripts/ directory yet; this starts checking them as soon as one exists.
+      - name: Lint shell scripts (shellcheck)
+        run: |
+          if compgen -G "scripts/*.sh" > /dev/null; then
+            shellcheck scripts/*.sh
+          else
+            echo "no scripts/*.sh yet, skipping"
+          fi
+
+      - name: Lint Dockerfile (hadolint)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/hadolint" \
+            "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}/hadolint-linux-x86_64"
+          echo "${HADOLINT_SHA256}  $RUNNER_TEMP/hadolint" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/hadolint"
+          "$RUNNER_TEMP/hadolint" backend/app/Dockerfile
+
+  # Reports known vulnerabilities but is NOT part of `CI gate` yet: it currently
+  # fails (Go stdlib in go1.26.4 and the AWS CloudWatch Logs SDK need bumping).
+  # Once those are fixed, add it to `needs:` of the gate to make it blocking.
+  govulncheck:
+    name: Vulnerability scan (govulncheck, advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend/app
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: backend/app/go.mod
+          cache-dependency-path: backend/app/go.sum
+
+      - name: Run govulncheck
+        run: |
+          go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+  # The single required check. `if: always()` makes it run (and fail) even when a
+  # needed job failed or was cancelled, instead of being skipped.
+  gate:
+    name: CI gate
+    if: always()
+    needs: [go, lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all needed jobs to succeed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "needed job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              echo "::error::a required job finished with result '$result'"
+              exit 1
+            fi
+          done
