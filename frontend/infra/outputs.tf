@@ -1,8 +1,3 @@
-output "dist_files" {
-  value     = fileset(local.dist_dir, "**/*")
-  sensitive = true
-}
-
 output "s3_website_endpoint" {
   description = "S3 hosting URL (HTTP)"
   value       = "http://${aws_s3_bucket_website_configuration.website_bucket.website_endpoint}"
