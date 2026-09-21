@@ -5,44 +5,54 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # One run per tag; different tags may run side by side.
+    concurrency:
+      group: docker-build-push-${{ github.ref }}
+      cancel-in-progress: false
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
         ref: main
         token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
     - name: Log in to Docker Hub
-      uses: docker/login-action@v3
+      uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
     - name: Extract Git tag
       id: tag
-      run: echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      run: echo "TAG=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
 
     - name: Build and push Docker image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
       with:
         context: ./backend/app
         platforms: linux/arm64
         push: true
         tags: |
           ${{ secrets.DOCKER_USERNAME }}/go-app:${{ steps.tag.outputs.TAG }}
-    
+
     - name: Update deployment version file
-      run: echo "${{ steps.tag.outputs.TAG }}" >> backend/app/deployment-version.txt
+      env:
+        TAG: ${{ steps.tag.outputs.TAG }}
+      run: echo "$TAG" >> backend/app/deployment-version.txt
 
     - name: Create deployment version PR
-      uses: peter-evans/create-pull-request@v5
+      uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
       with:
         token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         commit-message: "chore: propose deployment of ${{ steps.tag.outputs.TAG }}"

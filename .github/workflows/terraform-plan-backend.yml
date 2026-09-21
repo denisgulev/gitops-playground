@@ -14,15 +14,20 @@ jobs:
   terraform-plan:
     name: Terraform Plan and Validate (Backend)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A newer push to the same PR makes the older plan obsolete.
+    concurrency:
+      group: terraform-plan-backend-${{ github.ref }}
+      cancel-in-progress: true
     defaults:
       run:
         working-directory: backend/infra/
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
         

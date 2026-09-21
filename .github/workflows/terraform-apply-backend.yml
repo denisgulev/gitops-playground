@@ -14,19 +14,25 @@ jobs:
   terraform-apply:
     name: Terraform Apply (Backend)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: |
       contains(github.event.pull_request.labels.*.name, 'ready-for-tf-apply') &&
       github.event.pull_request.base.ref == 'main' &&
       github.event.pull_request.head.ref != github.event.pull_request.base.ref
+    # Never run two applies against the same workspace at once, and never cancel one mid-flight.
+    # Job-level (not workflow-level) so runs skipped by the `if:` above never take part.
+    concurrency:
+      group: terraform-apply-backend
+      cancel-in-progress: false
     defaults:
       run:
         working-directory: backend/infra
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
