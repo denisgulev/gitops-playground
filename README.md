@@ -185,7 +185,7 @@ Managed via Terraform (workspace: `Frontend`). See [frontend/infra/README.md](fr
 3. On `main` the workflow plans again and the **Apply** job waits for approval (Environment `infrastructure`), then applies
 
 **Static files:**
-- Push to `main` with changes in `frontend/static/` → `static-deploy.yml` syncs `dist/` to S3 and invalidates CloudFront cache
+- Push to `main` with changes in `frontend/static/` (or run the workflow manually) → `static-deploy.yml` syncs `dist/` to S3 with a `Cache-Control` header (HTML: 5 minutes, everything else: 1 day; file names are not fingerprinted), invalidates the CloudFront cache, and verifies that the bucket matches `dist/` with the intended headers
 
 ---
 
@@ -215,7 +215,7 @@ Grafana is accessible only via the EC2 instance's IP — it is not exposed publi
 | `_terraform.yml` | Called by the two workflows above | Shared logic: pinned Terraform, plan summary, approval-gated apply |
 | `ci.yml` | PR to `main` (and called by `release.yml`) | gofmt, vet, tests, actionlint, shellcheck, hadolint, govulncheck, image build + smoke test; single required check `CI gate` |
 | `release.yml` | Push of tag `vX.Y.Z`, or manual run with a tag | Verify tag → CI → build & push image → approval → deploy via SSM (canary) → verify public API version |
-| `static-deploy.yml` | Push to `main` touching `frontend/static/**` | S3 sync + CloudFront invalidation |
+| `static-deploy.yml` | Push to `main` touching `frontend/static/**`, or manual | S3 sync with cache headers + CloudFront invalidation + verification of the bucket |
 | `deploy-grafana.yml` | Push to `main` touching `observability-stack/**`, or manual | EC2 downloads the repo at the commit (via SSM) and runs `docker-compose up -d` |
 
 **Required GitHub Secrets:**
@@ -224,12 +224,17 @@ Grafana is accessible only via the EC2 instance's IP — it is not exposed publi
 |---|---|
 | `TF_API_TOKEN` | All Terraform workflows |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | release, static-deploy, deploy-grafana |
-| `AWS_REGION` | release, static-deploy, deploy-grafana |
 | `DOCKER_USERNAME` / `DOCKER_PASSWORD` | release |
-| `BUCKET_NAME` | static-deploy |
-| `DISTRIBUTION_ID` | static-deploy |
 
-`PERSONAL_ACCESS_TOKEN`, `EC2_USER` and `EC2_SSH_KEY` are no longer used by any workflow and can be deleted.
+**Repository Variables** (Settings → Secrets and variables → Actions → Variables). These are not secrets, so they live in variables. The workflows use the variable when it is set and fall back to the old secret of the same purpose, so the switch is safe to do in any order:
+
+| Variable | Fallback secret | Used by |
+|---|---|---|
+| `AWS_REGION` | `AWS_REGION` | release, static-deploy, deploy-grafana |
+| `S3_BUCKET` | `BUCKET_NAME` | static-deploy |
+| `CLOUDFRONT_DISTRIBUTION_ID` | `DISTRIBUTION_ID` | static-deploy |
+
+Once the variables are set, the secrets `AWS_REGION`, `BUCKET_NAME` and `DISTRIBUTION_ID` can be deleted. `PERSONAL_ACCESS_TOKEN`, `EC2_USER` and `EC2_SSH_KEY` are no longer used by any workflow and can be deleted too.
 
 ---
 
