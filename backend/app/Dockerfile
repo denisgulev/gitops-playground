@@ -4,18 +4,21 @@
 # arm64 image on an amd64 CI runner.
 FROM --platform=$BUILDPLATFORM golang:1.27.0-alpine AS builder
 
-# Set by BuildKit from --platform. The defaults keep the previous behaviour
-# (linux/arm64, the EC2 architecture) for builders that do not set them.
-ARG TARGETOS=linux
-ARG TARGETARCH=arm64
+# Set by BuildKit from --platform. Do NOT give these a default value here: a
+# default takes precedence over the value BuildKit passes in, which silently
+# builds the wrong architecture (an amd64 build got an arm64 binary).
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY main.go .
-# CGO_ENABLED=0 produces a fully static binary — no libc dependency
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o app .
+# CGO_ENABLED=0 produces a fully static binary — no libc dependency.
+# The fallbacks (linux/arm64, the EC2 architecture) only apply to a builder that
+# does not set the platform arguments.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-arm64} go build -ldflags="-s -w" -o app .
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM scratch
