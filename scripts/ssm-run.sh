@@ -54,8 +54,9 @@ while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in '' | '#'*) continue ;; esac
   key=${line%%=*}
   # Do not echo the line: it may contain a value that should stay out of logs.
-  [ "$key" != "$line" ] && [[ $key =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] ||
+  if [ "$key" = "$line" ] || ! [[ $key =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
     fail "SSM_ENV line $line_no is not KEY=VALUE with a valid variable name"
+  fi
   prologue+="export ${key}=$(shell_quote "${line#*=}")"$'\n'
 done <<<"$SSM_ENV"
 
