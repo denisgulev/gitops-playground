@@ -1,0 +1,46 @@
+version: 2
+
+updates:
+  # GitHub Actions are pinned to full commit SHAs (with a "# vX.Y.Z" comment).
+  # Dependabot updates both the SHA and the comment.
+  # Minor/patch bumps arrive as one grouped PR; major bumps get their own PR
+  # so the release notes can be read before merging.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: gomod
+    directory: /backend/app
+    schedule:
+      interval: weekly
+    groups:
+      go-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /backend/app
+    schedule:
+      interval: weekly
+
+  # Terraform is intentionally not enabled yet: the plan workflows need
+  # TF_API_TOKEN, and Dependabot PRs cannot read GitHub Actions secrets, so every
+  # Terraform bump would show a failing plan. To enable, add TF_API_TOKEN under
+  # Settings -> Secrets and variables -> Dependabot, then uncomment:
+  #
+  # - package-ecosystem: terraform
+  #   directory: /frontend/infra
+  #   schedule:
+  #     interval: weekly
+  # - package-ecosystem: terraform
+  #   directory: /backend/infra
+  #   schedule:
+  #     interval: weekly

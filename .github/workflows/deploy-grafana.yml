@@ -8,19 +8,27 @@ on:
       - 'observability-stack/**'
       - '!observability-stack/**/*.md'
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Latest push wins: a newer run replaces a queued one, but never interrupts a running deploy.
+    concurrency:
+      group: deploy-observability
+      cancel-in-progress: false
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Get EC2 Instance ID from SSM
         id: get_instance
         run: |
           INSTANCE_ID=$(aws ssm get-parameter --name "/infra/ec2/instance_id" --query "Parameter.Value" --output text)
-          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_OUTPUT
+          echo "INSTANCE_ID=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
           echo "Instance ID: $INSTANCE_ID"
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -32,8 +40,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
+          INSTANCE_ID: ${{ steps.get_instance.outputs.INSTANCE_ID }}
         run: |
-          INSTANCE_ID="${{ steps.get_instance.outputs.INSTANCE_ID }}"
           DEPLOY_DIR="/home/ec2-user/observability-stack"
 
           # Encode each file and build a shell script that writes them on EC2
@@ -116,9 +124,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
+          INSTANCE_ID: ${{ steps.get_instance.outputs.INSTANCE_ID }}
         run: |
-          INSTANCE_ID="${{ steps.get_instance.outputs.INSTANCE_ID }}"
-
           cat > /tmp/deploy.sh << 'EOF'
           #!/bin/bash
           set -e
