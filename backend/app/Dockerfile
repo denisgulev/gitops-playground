@@ -2,7 +2,7 @@
 # The build stage always runs on the machine doing the build ($BUILDPLATFORM) and
 # Go cross-compiles for the target, so no CPU emulation is needed to produce an
 # arm64 image on an amd64 CI runner.
-FROM --platform=$BUILDPLATFORM golang:1.27.0-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine AS builder
 
 # Set by BuildKit from --platform. Do NOT give these a default value here: a
 # default takes precedence over the value BuildKit passes in, which silently
